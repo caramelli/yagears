@@ -1,5 +1,7 @@
 aclocal.m4
 autom4te.cache
+config.h
+config.h.in
 config.log
 config.status
 configure
@@ -10,5 +12,6 @@ install-sh
 Makefile
 Makefile.in
 missing
+stamp-h1
 yagears
 *.o

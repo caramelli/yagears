@@ -25,7 +25,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/time.h>
+
+#include "config.h"
 
 #if defined(GL_X11)
 #include <GL/glx.h>
@@ -45,17 +48,23 @@
 #endif
 #if defined(EGL_FBDEV)
 #include <fcntl.h>
-#include <unistd.h>
 #include <linux/fb.h>
+#include <linux/input.h>
 #include <sys/ioctl.h>
 #endif
 #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV)
 #include <EGL/egl.h>
 #endif
 
-extern void init(int winWidth, int winHeight);
-extern void draw(float tZ, float rX, float rY, float rz);
-extern void fini();
+#if defined(GL)
+#include "gl_gears.h"
+#endif
+#if defined(GLESV1_CM)
+#include "glesv1_cm_gears.h"
+#endif
+#if defined(GLESV2)
+#include "glesv2_gears.h"
+#endif
 
 static int loop = 1;
 static float fps = 0;
@@ -72,14 +81,15 @@ static void sighandler(int signum)
 
 int main(int argc, char *argv[])
 {
-  char backends[64], *backend = NULL, *c;
+  char backends[64], *backend = NULL, *backend_arg = NULL, engines[64], *engine = NULL, *engine_arg = NULL, *c;
   float seconds, tZ = -40.0, rX = 20.0, rY = 30.0, rz = 0.0;
-  int winWidth = 0, winHeight = 0, winDepth = 0, frames = 0;
+  int opt, win_width = 0, win_height = 0, win_depth = 0, frames = 0;
   struct timeval last, now;
 
   #if defined(GL_X11) || defined(EGL_X11)
   Display *x11_dpy = NULL;
   Window x11_win = 0;
+  XEvent x11_event;
   #endif
   #if defined(GL_X11)
   XVisualInfo *x11_visual = NULL;
@@ -92,6 +102,8 @@ int main(int argc, char *argv[])
   DFBDisplayLayerConfig dfb_layer_config;
   IDirectFBSurface *dfb_win = NULL;
   DFBSurfaceDescription dfb_attr;
+  IDirectFBEventBuffer *dfb_event_buffer = NULL;
+  DFBInputEvent dfb_event;
   #endif
   #if defined(GL_DIRECTFB)
   IDirectFBGL *dfb_ctx = NULL;
@@ -101,6 +113,8 @@ int main(int argc, char *argv[])
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
   void *fb_win = NULL;
+  int fb_input = 0;
+  struct input_event fb_event;
   #endif
   #if defined(GL_FBDEV)
   void *fb_buffer = NULL;
@@ -112,9 +126,10 @@ int main(int argc, char *argv[])
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
-  EGLint egl_attr[3];
+  EGLint egl_config_attr[3];
   EGLint egl_nconfigs = 0;
   EGLConfig egl_config = NULL;
+  EGLint egl_ctx_attr[1];
   EGLContext egl_ctx = NULL;
   #endif
 
@@ -140,23 +155,62 @@ int main(int argc, char *argv[])
   strcat(backends, "egl-fbdev ");
   #endif
 
-  if (argc != 2) {
-    printf("\n\tUsage: %s backend\n\n", argv[0]);
-    printf("\t\t%s\n\n", backends);
+  memset(engines, 0, sizeof(engines));
+  #if defined(GL)
+  strcat(engines, "gl ");
+  #endif
+  #if defined(GLESV1_CM)
+  strcat(engines, "glesv1_cm ");
+  #endif
+  #if defined(GLESV2)
+  strcat(engines, "glesv2 ");
+  #endif
+
+  while ((opt = getopt(argc, argv, "b:e:")) != -1) {
+    switch (opt) {
+      case 'b':
+        backend_arg = optarg;
+        break;
+      case 'e':
+        engine_arg = optarg;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (argc != 5) {
+    printf("\n\tUsage: %s -b backend -e engine\n\n", argv[0]);
+    printf("\t\tbackends: %s\n\n", backends);
+    printf("\t\tengines:  %s\n\n", engines);
     return EXIT_FAILURE;
   }
 
   backend = backends;
   while ((c = strchr(backend, ' '))) {
     *c = '\0';
-    if (!strcmp(backend, argv[1]))
+    if (!strcmp(backend, backend_arg))
       break;
     else
       backend = c + 1;
   }
 
   if (!c) {
-    printf("%s backend unknown\n", argv[1]);
+    printf("%s: backend unknown\n", backend_arg);
+    return EXIT_FAILURE;
+  }
+
+  engine = engines;
+  while ((c = strchr(engine, ' '))) {
+    *c = '\0';
+    if (!strcmp(engine, engine_arg))
+      break;
+    else
+      engine = c + 1;
+  }
+
+  if (!c) {
+    printf("%s: engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
 
@@ -165,9 +219,9 @@ int main(int argc, char *argv[])
   #if defined(GL_X11) || defined(EGL_X11)
   if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
     x11_dpy = XOpenDisplay(NULL);
-    winWidth = DisplayWidth(x11_dpy, 0);
-    winHeight = DisplayHeight(x11_dpy, 0);
-    winDepth = DisplayPlanes(x11_dpy, 0);
+    win_width = DisplayWidth(x11_dpy, 0);
+    win_height = DisplayHeight(x11_dpy, 0);
+    win_depth = DisplayPlanes(x11_dpy, 0);
   }
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
@@ -178,21 +232,26 @@ int main(int argc, char *argv[])
     dfb_dpy->GetDisplayLayer(dfb_dpy, DLID_PRIMARY, &dfb_layer);
     memset(&dfb_layer_config, 0, sizeof(DFBDisplayLayerConfig));
     dfb_layer->GetConfiguration(dfb_layer, &dfb_layer_config);
-    winWidth = dfb_layer_config.width;
-    winHeight = dfb_layer_config.height;
-    winDepth = DFB_BITS_PER_PIXEL(dfb_layer_config.pixelformat);
+    win_width = dfb_layer_config.width;
+    win_height = dfb_layer_config.height;
+    win_depth = DFB_BITS_PER_PIXEL(dfb_layer_config.pixelformat);
   }
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    fb_dpy = open("/dev/fb0", O_RDWR);
+    if (getenv("FRAMEBUFFER")) {
+      fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
+    }
+    else {
+      fb_dpy = open("/dev/fb0", O_RDWR);
+    }
     memset(&fb_finfo, 0, sizeof(struct fb_fix_screeninfo));
     ioctl(fb_dpy, FBIOGET_FSCREENINFO, &fb_finfo);
     memset(&fb_vinfo, 0, sizeof(struct fb_var_screeninfo));
     ioctl(fb_dpy, FBIOGET_VSCREENINFO, &fb_vinfo);
-    winWidth = fb_vinfo.xres;
-    winHeight = fb_vinfo.yres;
-    winDepth = fb_vinfo.bits_per_pixel;
+    win_width = fb_vinfo.xres;
+    win_height = fb_vinfo.yres;
+    win_depth = fb_vinfo.bits_per_pixel;
   }
   #endif
 
@@ -222,7 +281,7 @@ int main(int argc, char *argv[])
     x11_attr[0] = GLX_RGBA;
     x11_attr[1] = GLX_DOUBLEBUFFER;
     x11_attr[2] = GLX_DEPTH_SIZE;
-    x11_attr[3] = winDepth;
+    x11_attr[3] = win_depth;
     x11_attr[4] = None;
     x11_visual = glXChooseVisual(x11_dpy, 0, x11_attr);
   }
@@ -238,7 +297,7 @@ int main(int argc, char *argv[])
   if (!strcmp(backend, "gl-fbdev")) {
     fb_attr[0] = GLFBDEV_DOUBLE_BUFFER;
     fb_attr[1] = GLFBDEV_DEPTH_SIZE;
-    fb_attr[2] = winDepth;
+    fb_attr[2] = win_depth;
     fb_attr[3] = GLFBDEV_NONE;
     fb_visual = glFBDevCreateVisual(&fb_finfo, &fb_vinfo, fb_attr);
   }
@@ -248,10 +307,10 @@ int main(int argc, char *argv[])
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev")) {
     eglInitialize(egl_dpy, NULL, NULL);
     eglBindAPI(EGL_OPENGL_API);
-    egl_attr[0] = EGL_DEPTH_SIZE;
-    egl_attr[1] = winDepth;
-    egl_attr[2] = EGL_NONE;
-    eglChooseConfig(egl_dpy, egl_attr, &egl_config, 1, &egl_nconfigs);
+    egl_config_attr[0] = EGL_DEPTH_SIZE;
+    egl_config_attr[1] = win_depth;
+    egl_config_attr[2] = EGL_NONE;
+    eglChooseConfig(egl_dpy, egl_config_attr, &egl_config, 1, &egl_nconfigs);
   }
   #endif
 
@@ -259,7 +318,7 @@ int main(int argc, char *argv[])
 
   #if defined(GL_X11) || defined(EGL_X11)
   if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
-    x11_win = XCreateSimpleWindow(x11_dpy, DefaultRootWindow(x11_dpy), 0, 0, winWidth, winHeight, 0, 0, 0);
+    x11_win = XCreateSimpleWindow(x11_dpy, DefaultRootWindow(x11_dpy), 0, 0, win_width, win_height, 0, 0, 0);
     XMapWindow(x11_dpy, x11_win);
   }
   #endif
@@ -270,8 +329,8 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
-    fb_buffer = mmap(NULL, winWidth * winHeight * winDepth >> 3, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
-    fb_win = glFBDevCreateBuffer(&fb_finfo, &fb_vinfo, fb_visual, fb_buffer, NULL, winWidth * winHeight * winDepth >> 3);
+    fb_buffer = mmap(NULL, win_width * win_height * win_depth >> 3, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
+    fb_win = glFBDevCreateBuffer(&fb_finfo, &fb_vinfo, fb_visual, fb_buffer, NULL, win_width * win_height * win_depth >> 3);
   }
   #endif
 
@@ -314,21 +373,73 @@ int main(int argc, char *argv[])
 
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV)
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev")) {
-    egl_ctx = eglCreateContext(egl_dpy, egl_config, EGL_NO_CONTEXT, NULL);
+    egl_ctx_attr[0] = EGL_NONE;
+    egl_ctx = eglCreateContext(egl_dpy, egl_config, EGL_NO_CONTEXT, egl_ctx_attr);
     eglMakeCurrent(egl_dpy, egl_win, egl_win, egl_ctx);
+  }
+  #endif
+
+  /* initialize input event */
+
+  #if defined(GL_X11) || defined(EGL_X11)
+  if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
+    XSelectInput(x11_dpy, x11_win, KeyPressMask);
+  }
+  #endif
+  #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
+  if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
+    dfb_dpy->CreateInputEventBuffer(dfb_dpy, DICAPS_KEYS, DFB_FALSE, &dfb_event_buffer);
+  }
+  #endif
+  #if defined(GL_FBDEV) || defined(EGL_FBDEV)
+  if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+    if (getenv("DEVINPUT")) {
+      fb_input = open(getenv("DEVINPUT"), O_RDONLY | O_NONBLOCK);
+    }
+    else {
+      fb_input = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    }
   }
   #endif
 
   /* drawing */
 
-  init(winWidth, winHeight);
+  #if defined(GL)
+  if (!strcmp(engine, "gl")) {
+    gl_gears_init(win_width, win_height);
+  }
+  #endif
+  #if defined(GLESV1_CM)
+  if (!strcmp(engine, "glesv1_cm")) {
+    glesv1_cm_gears_init(win_width, win_height);
+  }
+  #endif
+  #if defined(GLESV2)
+  if (!strcmp(engine, "glesv2")) {
+    glesv2_gears_init(win_width, win_height);
+  }
+  #endif
 
   signal(SIGINT, sighandler);
 
   gettimeofday(&last, NULL);
 
   while (loop) {
-    draw(tZ, rX, rY, rz);
+    #if defined(GL)
+    if (!strcmp(engine, "gl")) {
+      gl_gears_draw(tZ, rX, rY, rz);
+    }
+    #endif
+    #if defined(GLESV1_CM)
+    if (!strcmp(engine, "glesv1_cm")) {
+      glesv1_cm_gears_draw(tZ, rX, rY, rz);
+    }
+    #endif
+    #if defined(GLESV2)
+    if (!strcmp(engine, "glesv2")) {
+      glesv2_gears_draw(tZ, rX, rY, rz);
+    }
+    #endif
 
     #if defined(GL_X11)
     if (!strcmp(backend, "gl-x11")) {
@@ -355,7 +466,7 @@ int main(int argc, char *argv[])
     frames++;
 
     gettimeofday(&now, NULL);
-    seconds = (now.tv_sec - last.tv_sec) + (now.tv_usec - last.tv_usec) / 1000000.0;
+    seconds = (now.tv_sec - last.tv_sec) + (now.tv_usec - last.tv_usec) * 1e-6;
     if (seconds >= 2) {
       loop++;
       fps += frames / seconds;
@@ -364,9 +475,137 @@ int main(int argc, char *argv[])
     }
 
     rz += 1.0;
+
+    #if defined(GL_X11) || defined(EGL_X11)
+    if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
+      if (XPending(x11_dpy)) {
+        XNextEvent(x11_dpy, &x11_event);
+        switch (XLookupKeysym(&x11_event.xkey, 0)) {
+          case XK_Escape:
+            sighandler(SIGTERM);
+            break;
+          case XK_Page_Down:
+            tZ -= -5.0;
+            break;
+          case XK_Page_Up:
+            tZ += -5.0;
+            break;
+          case XK_Down:
+            rX -= 5.0;
+            break;
+          case XK_Up:
+            rX += 5.0;
+            break;
+          case XK_Right:
+            rY -= 5.0;
+            break;
+          case XK_Left:
+            rY += 5.0;
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    #endif
+    #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
+    if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
+      if (!dfb_event_buffer->GetEvent(dfb_event_buffer, (DFBEvent *)&dfb_event) && dfb_event.type == DIET_KEYPRESS) {
+        switch (dfb_event.key_symbol) {
+          case DIKS_ESCAPE:
+            sighandler(SIGTERM);
+            break;
+          case DIKS_PAGE_DOWN:
+            tZ -= -5.0;
+            break;
+          case DIKS_PAGE_UP:
+            tZ += -5.0;
+            break;
+          case DIKS_CURSOR_DOWN:
+            rX -= 5.0;
+            break;
+          case DIKS_CURSOR_UP:
+            rX += 5.0;
+            break;
+          case DIKS_CURSOR_RIGHT:
+            rY -= 5.0;
+            break;
+          case DIKS_CURSOR_LEFT:
+            rY += 5.0;
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    #endif
+    #if defined(GL_FBDEV) || defined(EGL_FBDEV)
+    if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+      read(fb_input, &fb_event, sizeof(fb_event));
+      if (fb_event.type == EV_KEY && fb_event.value) {
+        switch (fb_event.code) {
+          case KEY_ESC:
+            sighandler(SIGTERM);
+            break;
+          case KEY_PAGEDOWN:
+            tZ -= -5.0;
+            break;
+          case KEY_PAGEUP:
+            tZ += -5.0;
+            break;
+          case KEY_DOWN:
+            rX -= 5.0;
+            break;
+          case KEY_UP:
+            rX += 5.0;
+            break;
+          case KEY_RIGHT:
+            rY -= 5.0;
+            break;
+          case KEY_LEFT:
+            rY += 5.0;
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    #endif
   }
 
-  fini();
+  #if defined(GL)
+  if (!strcmp(engine, "gl")) {
+    gl_gears_free();
+  }
+  #endif
+  #if defined(GLESV1_CM)
+  if (!strcmp(engine, "glesv1_cm")) {
+    glesv1_cm_gears_free();
+  }
+  #endif
+  #if defined(GLESV2)
+  if (!strcmp(engine, "glesv2")) {
+    glesv2_gears_free();
+  }
+  #endif
+
+  /* release input event */
+
+  #if defined(GL_X11) || defined(EGL_X11)
+  if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
+    XSelectInput(x11_dpy, x11_win, NoEventMask);
+  }
+  #endif
+  #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
+  if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
+    dfb_event_buffer->Release(dfb_event_buffer);
+  }
+  #endif
+  #if defined(GL_FBDEV) || defined(EGL_FBDEV)
+  if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+    close(fb_input);
+  }
+  #endif
 
   /* destroy context */
 
@@ -425,7 +664,7 @@ int main(int argc, char *argv[])
   #if defined(GL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
     glFBDevDestroyBuffer(fb_win);
-    munmap(fb_buffer, winWidth * winHeight * winDepth >> 3);
+    munmap(fb_buffer, win_width * win_height * win_depth >> 3);
     glFBDevDestroyVisual(fb_visual);
   }
   #endif

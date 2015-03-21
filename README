@@ -1,8 +1,8 @@
 Yet Another Gears OpenGL demo
 -----------------------------
 
-The yagears package contains a version of the popular gears OpenGL demo
-that supports multiple graphic renderers:
+The yagears package contains a version of the popular gears OpenGL demo (with
+OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
   - GLX interface (OpenGL Extension to the X Window System)
   - DirectFBGL interface (OpenGL Extension for DirectFB)
   - GLFBDev interface (OpenGL Extension to the Linux Framebuffer)
