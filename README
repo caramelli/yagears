@@ -1,0 +1,15 @@
+Yet Another Gears OpenGL demo
+-----------------------------
+
+The yagears package contains a version of the popular gears OpenGL demo
+that supports multiple graphic renderers:
+  - GLX interface (OpenGL Extension to the X Window System)
+  - DirectFBGL interface (OpenGL Extension for DirectFB)
+  - GLFBDev interface (OpenGL Extension to the Linux Framebuffer)
+  - EGL interface with X11 display
+  - EGL interface with DirectFB display
+  - EGL interface with Linux Framebuffer display
+
+Have fun,
+
+Nicolas Caramelli

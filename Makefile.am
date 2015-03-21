@@ -1,0 +1,4 @@
+bin_PROGRAMS = yagears
+yagears_SOURCES = main.c gl_gears.c
+INCLUDES = @GL_CFLAGS@ @EGL_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@
+yagears_LDADD = @GL_LIBS@ @EGL_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@

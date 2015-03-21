@@ -1,0 +1,4 @@
+0.1
+---
+GLX, DirectFBGL, GLFBDev support
+EGL with X11, DirectFB, FBDev display support
