@@ -1,3 +1,15 @@
+commit 5591d5bbe1a2d14b691a5349e32e0579d3914afd
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Mar 21 20:54:40 2015 +0100
+
+    add OpenGL ES 1.1 CM and 2.0 support, handle input event
+
+commit dcc38a0fe7685de8f7802f1077cbee980e5f2fbe
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Mar 21 20:50:35 2015 +0100
+
+    update ChangeLog
+
 commit fe22c917f22d7d517a42b4d7d28d8d1d6361aaaa
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Mar 21 20:49:39 2015 +0100
