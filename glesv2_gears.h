@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2014  Nicolas Caramelli
+  Copyright (C) 2013-2015  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -22,5 +22,5 @@
 */
 
 void glesv2_gears_init(int win_width, int win_height);
-void glesv2_gears_draw(float tZ, float rX, float rY, float rz);
-void glesv2_gears_free();
+void glesv2_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz);
+void glesv2_gears_exit();

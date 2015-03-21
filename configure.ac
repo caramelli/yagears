@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.2)
+AC_INIT(yagears, 0.3)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -8,7 +8,7 @@ AC_PROG_CC
 
 PKG_PROG_PKG_CONFIG
 
-CFLAGS="$CFLAGS -Wall"
+CFLAGS="$CFLAGS -Wall -D_GNU_SOURCE"
 LIBS="$LIBS -lm"
 
 AC_ARG_ENABLE(gl,

@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2014  Nicolas Caramelli
+  Copyright (C) 2013-2015  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 
 #include <GL/gl.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 /******************************************************************************/
@@ -33,36 +34,56 @@ struct gear {
 
 static struct gear *gear1, *gear2, *gear3;
 
-static struct gear *create_gear(GLfloat inner_radius, GLfloat outer_radius, GLfloat width, GLint teeth, GLfloat tooth_depth)
+static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
 {
   struct gear *gear;
-  GLfloat r0, r1, r2, da, angle;
-  GLint i;
+  GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
+  GLint i, j;
+  GLenum err;
 
   gear = calloc(1, sizeof(struct gear));
-  gear->list = glGenLists(1);
-  glNewList(gear->list, GL_COMPILE);
+  if (!gear) {
+    printf("calloc gear failed\n");
+    return NULL;
+  }
 
-  r0 = inner_radius;
-  r1 = outer_radius - tooth_depth / 2;
-  r2 = outer_radius + tooth_depth / 2;
-  da = 2 * M_PI / teeth / 4;
+  gear->list = glGenLists(1);
+  if (!gear->list) {
+    printf("glGenLists failed\n");
+    return NULL;
+  }
+
+  glNewList(gear->list, GL_COMPILE);
+  err = glGetError();
+  if (err) {
+    printf("glNewList failed: 0x%x\n", err);
+    return NULL;
+  }
+
+  r0 = inner;
+  r1 = outer - tooth_depth / 2;
+  r2 = outer + tooth_depth / 2;
+  a1 = 2 * M_PI / teeth;
+  da = a1 / 4;
 
   for (i = 0; i < teeth; i++) {
-    angle = i * 2 * M_PI / teeth;
+    ai = i * a1;
+    for (j = 0; j < 5; j++) {
+      sincosf(ai + j * da, &s[j], &c[j]);
+    }
 
     /* front face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* front face normal */
     glNormal3f(0, 0, 1);
     /* front face vertices */
-    glVertex3f(r2 * cos(angle + da),     r2 * sin(angle + da),     width / 2);
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da), width / 2);
-    glVertex3f(r1 * cos(angle),          r1 * sin(angle),          width / 2);
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da), width / 2);
-    glVertex3f(r0 * cos(angle),          r0 * sin(angle),          width / 2);
-    glVertex3f(r1 * cos(angle + 4 * da), r1 * sin(angle + 4 * da), width / 2);
-    glVertex3f(r0 * cos(angle + 4 * da), r0 * sin(angle + 4 * da), width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1], width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2], width / 2);
+    glVertex3f(r1 * c[0], r1 * s[0], width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3], width / 2);
+    glVertex3f(r0 * c[0], r0 * s[0], width / 2);
+    glVertex3f(r1 * c[4], r1 * s[4], width / 2);
+    glVertex3f(r0 * c[4], r0 * s[4], width / 2);
     /* front face end */
     glEnd();
 
@@ -71,73 +92,73 @@ static struct gear *create_gear(GLfloat inner_radius, GLfloat outer_radius, GLfl
     /* back face normal */
     glNormal3f(0, 0, -1);
     /* back face vertices */
-    glVertex3f(r2 * cos(angle + da),     r2 * sin(angle + da),     -width / 2);
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da), -width / 2);
-    glVertex3f(r1 * cos(angle),          r1 * sin(angle),          -width / 2);
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da), -width / 2);
-    glVertex3f(r0 * cos(angle),          r0 * sin(angle),          -width / 2);
-    glVertex3f(r1 * cos(angle + 4 * da), r1 * sin(angle + 4 * da), -width / 2);
-    glVertex3f(r0 * cos(angle + 4 * da), r0 * sin(angle + 4 * da), -width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1], -width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2], -width / 2);
+    glVertex3f(r1 * c[0], r1 * s[0], -width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3], -width / 2);
+    glVertex3f(r0 * c[0], r0 * s[0], -width / 2);
+    glVertex3f(r1 * c[4], r1 * s[4], -width / 2);
+    glVertex3f(r0 * c[4], r0 * s[4], -width / 2);
     /* back face end */
     glEnd();
 
     /* first outward face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* first outward face normal */
-    glNormal3f(r2 * sin(angle + da) - r1 * sin(angle), r1 * cos(angle) - r2 * cos(angle + da), 0);
+    glNormal3f(r2 * s[1] - r1 * s[0], r1 * c[0] - r2 * c[1], 0);
     /* first outward face vertices */
-    glVertex3f(r1 * cos(angle),      r1 * sin(angle),       width / 2);
-    glVertex3f(r1 * cos(angle),      r1 * sin(angle),      -width / 2);
-    glVertex3f(r2 * cos(angle + da), r2 * sin(angle + da),  width / 2);
-    glVertex3f(r2 * cos(angle + da), r2 * sin(angle + da), -width / 2);
+    glVertex3f(r1 * c[0], r1 * s[0],  width / 2);
+    glVertex3f(r1 * c[0], r1 * s[0], -width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1],  width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1], -width / 2);
     /* first outward face end */
     glEnd();
 
     /* second outward face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* second outward face normal */
-    glNormal3f(r2 * sin(angle + 2 * da) - r2 * sin(angle + da), r2 * cos(angle + da) - r2 * cos(angle + 2 * da), 0);
+    glNormal3f(s[2] - s[1], c[1] - c[2], 0);
     /* second outward face vertices */
-    glVertex3f(r2 * cos(angle + da),     r2 * sin(angle + da),      width / 2);
-    glVertex3f(r2 * cos(angle + da),     r2 * sin(angle + da),     -width / 2);
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da),  width / 2);
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da), -width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1],  width / 2);
+    glVertex3f(r2 * c[1], r2 * s[1], -width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2],  width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2], -width / 2);
     /* second outward face end */
     glEnd();
 
     /* third outward face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* third outward face normal */
-    glNormal3f(r1 * sin(angle + 3 * da) - r2 * sin(angle + 2 * da), r2 * cos(angle + 2 * da) - r1 * cos(angle + 3 * da), 0);
+    glNormal3f(r1 * s[3] - r2 * s[2], r2 * c[2] - r1 * c[3], 0);
     /* third outward face vertices */
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da),  width / 2);
-    glVertex3f(r2 * cos(angle + 2 * da), r2 * sin(angle + 2 * da), -width / 2);
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da),  width / 2);
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da), -width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2],  width / 2);
+    glVertex3f(r2 * c[2], r2 * s[2], -width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3],  width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3], -width / 2);
     /* third outward face end */
     glEnd();
 
     /* fourth outward face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* fourth outward face normal */
-    glNormal3f(r1 * sin(angle + 4 * da) - r1 * sin(angle + 3 * da), r1 * cos(angle + 3 * da) - r1 * cos(angle + 4 * da), 0);
+    glNormal3f(s[4] - s[3], c[3] - c[4], 0);
     /* fourth outward face vertices */
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da),  width / 2);
-    glVertex3f(r1 * cos(angle + 3 * da), r1 * sin(angle + 3 * da), -width / 2);
-    glVertex3f(r1 * cos(angle + 4 * da), r1 * sin(angle + 4 * da),  width / 2);
-    glVertex3f(r1 * cos(angle + 4 * da), r1 * sin(angle + 4 * da), -width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3],  width / 2);
+    glVertex3f(r1 * c[3], r1 * s[3], -width / 2);
+    glVertex3f(r1 * c[4], r1 * s[4],  width / 2);
+    glVertex3f(r1 * c[4], r1 * s[4], -width / 2);
     /* fourth outward face end */
     glEnd();
 
     /* inside face begin */
     glBegin(GL_TRIANGLE_STRIP);
     /* inside face normal */
-    glNormal3f(r0 * sin(angle) - r0 * sin(angle + 4 * da), r0 * cos(angle + 4 * da) - r0 * cos(angle), 0);
+    glNormal3f(s[0] - s[4], c[4] - c[0], 0);
     /* inside face vertices */
-    glVertex3f(r0 * cos(angle),          r0 * sin(angle),           width / 2);
-    glVertex3f(r0 * cos(angle),          r0 * sin(angle),          -width / 2);
-    glVertex3f(r0 * cos(angle + 4 * da), r0 * sin(angle + 4 * da),  width / 2);
-    glVertex3f(r0 * cos(angle + 4 * da), r0 * sin(angle + 4 * da), -width / 2);
+    glVertex3f(r0 * c[0], r0 * s[0],  width / 2);
+    glVertex3f(r0 * c[0], r0 * s[0], -width / 2);
+    glVertex3f(r0 * c[4], r0 * s[4],  width / 2);
+    glVertex3f(r0 * c[4], r0 * s[4], -width / 2);
     /* inside face end */
     glEnd();
   }
@@ -147,28 +168,28 @@ static struct gear *create_gear(GLfloat inner_radius, GLfloat outer_radius, GLfl
   return gear;
 }
 
-static void draw_gear(struct gear *gear, GLfloat tZ, GLfloat rX, GLfloat rY, GLfloat tx, GLfloat ty, GLfloat rz, const GLfloat *color)
+static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
 {
   const GLfloat material_ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
 
-  glLoadIdentity();
-  /* View */
-  glTranslatef(0, 0, tZ);
-  glRotatef(rX, 1, 0, 0);
-  glRotatef(rY, 0, 1, 0);
-  /* Model */
-  glTranslatef(tx, ty, 0);
-  glRotatef(rz, 0, 0, 1);
+  glPushMatrix();
+
+  glTranslatef(model_tx, model_ty, 0);
+  glRotatef(model_rz, 0, 0, 1);
 
   glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, material_ambient);
   glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color);
 
   glCallList(gear->list);
+
+  glPopMatrix();
 }
 
 static void delete_gear(struct gear *gear)
 {
-  glDeleteLists(gear->list, 1);
+  if (gear->list) {
+    glDeleteLists(gear->list, 1);
+  }
 
   free(gear);
 }
@@ -188,33 +209,62 @@ void gl_gears_init(int win_width, int win_height)
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
   gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
+  if (!gear1) {
+    return;
+  }
+
   gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
+  if (!gear2) {
+    return;
+  }
+
   gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
+  if (!gear3) {
+    return;
+  }
 
   glMatrixMode(GL_PROJECTION);
 
-  /* Projection */
   glFrustum(-1, 1, -(GLdouble)win_height/win_width, (GLdouble)win_height/win_width, zNear, zFar);
 
   glMatrixMode(GL_MODELVIEW);
 }
 
-void gl_gears_draw(float tZ, float rX, float rY, float rz)
+void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
 {
   const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
   const GLfloat blue[4] = { 0.2, 0.2, 1.0, 1.0 };
 
+  if (!gear1 || !gear2 || !gear3) {
+    return;
+  }
+
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  draw_gear(gear1, (GLfloat)tZ, (GLfloat)rX, (GLfloat)rY, -3.0, -2.0,      (GLfloat)rz     , red);
-  draw_gear(gear2, (GLfloat)tZ, (GLfloat)rX, (GLfloat)rY,  3.1, -2.0, -2 * (GLfloat)rz - 9 , green);
-  draw_gear(gear3, (GLfloat)tZ, (GLfloat)rX, (GLfloat)rY, -3.1,  4.2, -2 * (GLfloat)rz - 25, blue);
+  glLoadIdentity();
+  glTranslatef(0, 0, (GLfloat)view_tz);
+  glRotatef((GLfloat)view_rx, 1, 0, 0);
+  glRotatef((GLfloat)view_ry, 0, 1, 0);
+
+  draw_gear(gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
+  draw_gear(gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
+  draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void gl_gears_free()
+void gl_gears_exit()
 {
-  delete_gear(gear1);
-  delete_gear(gear2);
-  delete_gear(gear3);
+  if (gear1) {
+    delete_gear(gear1);
+  }
+
+  if (gear2) {
+    delete_gear(gear2);
+  }
+
+  if (gear3) {
+    delete_gear(gear3);
+  }
+
+  printf("%s\n", glGetString(GL_VERSION));
 }
