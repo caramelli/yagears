@@ -1,3 +1,15 @@
+commit 6a0945cf74d7d0ba06c5ff278c460e5913ec86ea
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Mar 21 20:58:18 2015 +0100
+
+    handle error
+
+commit 64c088eb9f780b938f0dee32d2582fd48cba9bea
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Mar 21 20:55:23 2015 +0100
+
+    update ChangeLog
+
 commit 5591d5bbe1a2d14b691a5349e32e0579d3914afd
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Mar 21 20:54:40 2015 +0100
