@@ -21,6 +21,14 @@
   THE SOFTWARE.
 */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void gl_gears_init(int win_width, int win_height);
 void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz);
-void gl_gears_exit();
+void gl_gears_term();
+
+#ifdef __cplusplus
+}
+#endif

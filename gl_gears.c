@@ -32,7 +32,7 @@ struct gear {
   GLuint list;
 };
 
-static struct gear *gear1, *gear2, *gear3;
+static struct gear *gear1 = NULL, *gear2 = NULL, *gear3 = NULL;
 
 static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
 {
@@ -187,9 +187,7 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
 static void delete_gear(struct gear *gear)
 {
-  if (gear->list) {
-    glDeleteLists(gear->list, 1);
-  }
+  glDeleteLists(gear->list, 1);
 
   free(gear);
 }
@@ -223,6 +221,8 @@ void gl_gears_init(int win_width, int win_height)
     return;
   }
 
+  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+
   glMatrixMode(GL_PROJECTION);
 
   glFrustum(-1, 1, -(GLdouble)win_height/win_width, (GLdouble)win_height/win_width, zNear, zFar);
@@ -252,7 +252,7 @@ void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
   draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void gl_gears_exit()
+void gl_gears_term()
 {
   if (gear1) {
     delete_gear(gear1);

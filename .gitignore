@@ -1,5 +1,6 @@
 aclocal.m4
 autom4te.cache
+compile
 config.h
 config.h.in
 config.log
@@ -14,4 +15,5 @@ Makefile.in
 missing
 stamp-h1
 yagears
+yagears-gui
 *.o

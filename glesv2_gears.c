@@ -21,7 +21,7 @@
   THE SOFTWARE.
 */
 
-#include <GLES2/gl2.h>
+#include GLESV2_H
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,85 +55,29 @@ static void multiply(GLfloat *a, const GLfloat *b)
   memcpy(a, m, sizeof(m));
 }
 
-static void translate_x(GLfloat *a, GLfloat transx)
+static void translate(GLfloat *a, GLfloat tx, GLfloat ty, GLfloat tz)
 {
   GLfloat m[16] = {
-         1, 0, 0, 0,
-         0, 1, 0, 0,
-         0, 0, 1, 0,
-    transx, 0, 0, 1
+     1,  0,  0, 0,
+     0,  1,  0, 0,
+     0,  0,  1, 0,
+    tx, ty, tz, 1
   };
 
   multiply(a, m);
 }
 
-static void translate_y(GLfloat *a, GLfloat transy)
-{
-  GLfloat m[16] = {
-    1,      0, 0, 0,
-    0,      1, 0, 0,
-    0,      0, 1, 0,
-    0, transy, 0, 1
-  };
-
-  multiply(a, m);
-}
-
-static void translate_z(GLfloat *a, GLfloat transz)
-{
-  GLfloat m[16] = {
-    1, 0,      0, 0,
-    0, 1,      0, 0,
-    0, 0,      1, 0,
-    0, 0, transz, 1
-  };
-
-  multiply(a, m);
-}
-
-static void rotate_x(GLfloat *a, GLfloat rotx)
+static void rotate(GLfloat *a, GLfloat r, GLfloat ux, GLfloat uy, GLfloat uz)
 {
   GLfloat s, c;
 
-  sincosf(rotx * M_PI / 180, &s, &c);
+  sincosf(r * M_PI / 180, &s, &c);
 
   GLfloat m[16] = {
-    1,  0, 0, 0,
-    0,  c, s, 0,
-    0, -s, c, 0,
-    0,  0, 0, 1
-  };
-
-  multiply(a, m);
-}
-
-static void rotate_y(GLfloat *a, GLfloat roty)
-{
-  GLfloat s, c;
-
-  sincosf(roty * M_PI / 180, &s, &c);
-
-  GLfloat m[16] = {
-    c, 0, -s, 0,
-    0, 1,  0, 0,
-    s, 0,  c, 0,
-    0, 0,  0, 1
-  };
-
-  multiply(a, m);
-}
-
-static void rotate_z(GLfloat *a, GLfloat rotz)
-{
-  GLfloat s, c;
-
-  sincosf(rotz * M_PI / 180, &s, &c);
-
-  GLfloat m[16] = {
-     c, s, 0, 0,
-    -s, c, 0, 0,
-     0, 0, 1, 0,
-     0, 0, 0, 1
+         ux * ux * (1 - c) + c, uy * ux * (1 - c) + uz * s, ux * uz * (1 - c) - uy * s, 0,
+    ux * uy * (1 - c) - uz * s,      uy * uy * (1 - c) + c, uy * uz * (1 - c) + ux * s, 0,
+    ux * uz * (1 - c) + uy * s, uy * uz * (1 - c) - ux * s,      uz * uz * (1 - c) + c, 0,
+                             0,                          0,                          0, 1
   };
 
   multiply(a, m);
@@ -171,16 +115,18 @@ static void invert(GLfloat *a)
 static GLuint program = 0, vertShader = 0, fragShader = 0;
 static GLint LightPos_loc, ModelViewProjection_loc, Normal_loc, Color_loc;
 
-struct strip {
+typedef GLfloat Vertex[6];
+
+typedef struct {
   GLint begin;
   GLsizei count;
-};
+} Strip;
 
 struct gear {
   GLint nvertices;
-  GLfloat *vertices;
+  Vertex *vertices;
   GLint nstrips;
-  struct strip *strips;
+  Strip *strips;
   GLuint vbo;
 };
 
@@ -203,14 +149,14 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   }
 
   gear->nvertices = 0;
-  gear->vertices = calloc(34 * teeth, 6 * sizeof(GLfloat));
+  gear->vertices = calloc(34 * teeth, sizeof(Vertex));
   if (!gear->vertices) {
     printf("calloc vertices failed\n");
     return NULL;
   }
 
   gear->nstrips = 7 * teeth;
-  gear->strips = calloc(gear->nstrips, sizeof(struct strip));
+  gear->strips = calloc(gear->nstrips, sizeof(Strip));
   if (!gear->strips) {
     printf("calloc strips failed\n");
     return NULL;
@@ -228,12 +174,12 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     n[2] = nz;
 
   #define vertex(x, y, z) \
-    gear->vertices[6 * gear->nvertices]     = x; \
-    gear->vertices[6 * gear->nvertices + 1] = y; \
-    gear->vertices[6 * gear->nvertices + 2] = z; \
-    gear->vertices[6 * gear->nvertices + 3] = n[0]; \
-    gear->vertices[6 * gear->nvertices + 4] = n[1]; \
-    gear->vertices[6 * gear->nvertices + 5] = n[2]; \
+    gear->vertices[gear->nvertices][0] = x; \
+    gear->vertices[gear->nvertices][1] = y; \
+    gear->vertices[gear->nvertices][2] = z; \
+    gear->vertices[gear->nvertices][3] = n[0]; \
+    gear->vertices[gear->nvertices][4] = n[1]; \
+    gear->vertices[gear->nvertices][5] = n[2]; \
     gear->nvertices++;
 
   for (i = 0; i < teeth; i++) {
@@ -348,7 +294,7 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glBufferData(GL_ARRAY_BUFFER, gear->nvertices * 6 * sizeof(GLfloat), gear->vertices, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
 
   return gear;
 }
@@ -360,9 +306,8 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
   memcpy(ModelView, View, sizeof(ModelView));
 
-  translate_x(ModelView, model_tx);
-  translate_y(ModelView, model_ty);
-  rotate_z(ModelView, model_rz);
+  translate(ModelView, model_tx, model_ty, 0);
+  rotate(ModelView, model_rz, 0, 0, 1);
 
   /* Set u_ModelViewProjectionMatrix */
   memcpy(ModelViewProjection, Projection, sizeof(ModelViewProjection));
@@ -379,8 +324,8 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), NULL);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (const GLvoid *)(3 * sizeof(GLfloat)));
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 3);
 
   glEnableVertexAttribArray(0);
   glEnableVertexAttribArray(1);
@@ -395,17 +340,9 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
 static void delete_gear(struct gear *gear)
 {
-  if (gear->vbo) {
-    glDeleteBuffers(1, &gear->vbo);
-  }
-
-  if (gear->strips) {
-    free(gear->strips);
-  }
-
-  if (gear->vertices) {
-    free(gear->vertices);
-  }
+  glDeleteBuffers(1, &gear->vbo);
+  free(gear->strips);
+  free(gear->vertices);
 
   free(gear);
 }
@@ -414,8 +351,8 @@ static void delete_gear(struct gear *gear)
 
 void glesv2_gears_init(int win_width, int win_height)
 {
-  const char *vertShaderSrc =
-    "attribute vec3 a_Position;\n"
+  const char *vertShaderSource =
+    "attribute vec3 a_Vertex;\n"
     "attribute vec3 a_Normal;\n"
     "uniform vec4 u_LightPos;\n"
     "uniform mat4 u_ModelViewProjectionMatrix;\n"
@@ -424,10 +361,10 @@ void glesv2_gears_init(int win_width, int win_height)
     "varying vec4 v_Color;\n"
     "void main(void)\n"
     "{\n"
-    "  gl_Position = u_ModelViewProjectionMatrix * vec4(a_Position, 1);\n"
+    "  gl_Position = u_ModelViewProjectionMatrix * vec4(a_Vertex, 1);\n"
     "  v_Color = u_Color * dot(normalize(u_LightPos.xyz), normalize(vec3(u_NormalMatrix * vec4(a_Normal, 1))));\n"
     "}";
-  const char *fragShaderSrc =
+  const char *fragShaderSource =
     "precision mediump float;\n"
     "varying vec4 v_Color;\n"
     "void main()\n"
@@ -455,7 +392,7 @@ void glesv2_gears_init(int win_width, int win_height)
     return;
   }
 
-  glShaderSource(vertShader, 1, &vertShaderSrc, NULL);
+  glShaderSource(vertShader, 1, &vertShaderSource, NULL);
 
   glCompileShader(vertShader);
   glGetShaderiv(vertShader, GL_COMPILE_STATUS, &params);
@@ -482,7 +419,7 @@ void glesv2_gears_init(int win_width, int win_height)
     return;
   }
 
-  glShaderSource(fragShader, 1, &fragShaderSrc, NULL);
+  glShaderSource(fragShader, 1, &fragShaderSource, NULL);
 
   glCompileShader(fragShader);
   glGetShaderiv(fragShader, GL_COMPILE_STATUS, &params);
@@ -503,7 +440,7 @@ void glesv2_gears_init(int win_width, int win_height)
 
   /* link and use program */
 
-  glBindAttribLocation(program, 0, "a_Position");
+  glBindAttribLocation(program, 0, "a_Vertex");
   glBindAttribLocation(program, 1, "a_Normal");
 
   glLinkProgram(program);
@@ -548,6 +485,8 @@ void glesv2_gears_init(int win_width, int win_height)
     return;
   }
 
+  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+
   memset(Projection, 0, sizeof(Projection));
   Projection[0] = zNear;
   Projection[5] = (GLfloat)win_width/win_height * zNear;
@@ -569,16 +508,16 @@ void glesv2_gears_draw(float view_tz, float view_rx, float view_ry, float model_
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   identity(View);
-  translate_z(View, (GLfloat)view_tz);
-  rotate_x(View, (GLfloat)view_rx);
-  rotate_y(View, (GLfloat)view_ry);
+  translate(View, 0, 0, (GLfloat)view_tz);
+  rotate(View, (GLfloat)view_rx, 1, 0, 0);
+  rotate(View, (GLfloat)view_ry, 0, 1, 0);
 
   draw_gear(gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
   draw_gear(gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
   draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void glesv2_gears_exit()
+void glesv2_gears_term()
 {
   if (gear1) {
     delete_gear(gear1);

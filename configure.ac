@@ -1,10 +1,13 @@
-AC_INIT(yagears, 0.3)
+AC_INIT(yagears, 0.4)
 
 AC_CONFIG_HEADERS(config.h)
 
 AM_INIT_AUTOMAKE
 
 AC_PROG_CC
+AC_PROG_CXX
+
+AM_PROG_CC_C_O
 
 PKG_PROG_PKG_CONFIG
 
@@ -23,14 +26,25 @@ AC_ARG_ENABLE(glesv2,
 
 if test x$enable_gl = xyes; then
   PKG_CHECK_MODULES(GL, gl, AC_DEFINE(GL, 1, Support for OpenGL engine), enable_gl=no)
-fi
-
-if test x$enable_glesv1_cm = xyes; then
-  PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, AC_DEFINE(GLESV1_CM, 1, Support for OpenGL ES 1.1 CM engine), enable_glesv1_cm=no)
-fi
-
-if test x$enable_glesv2 = xyes; then
-  PKG_CHECK_MODULES(GLESV2, glesv2, AC_DEFINE(GLESV2, 1, Support for OpenGL ES 2.0 engine), enable_glesv2=no)
+  if test x$enable_gl = xyes; then
+    if test x$enable_glesv1_cm = xyes; then
+      AC_DEFINE(GLESV1_CM, 1, Support for OpenGL ES 1.1 CM engine)
+      CPPFLAGS="$CPPFLAGS -DGLESV1_CM_H=\<GL/gl.h\>"
+    fi
+    if test x$enable_glesv2 = xyes; then
+      AC_DEFINE(GLESV2, 1, Support for OpenGL ES 2.0 engine)
+      CPPFLAGS="$CPPFLAGS -DGLESV2_H=\<GL/gl.h\>"
+    fi
+  fi
+else
+  if test x$enable_glesv1_cm = xyes; then
+    PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, AC_DEFINE(GLESV1_CM, 1, Support for OpenGL ES 1.1 CM engine), enable_glesv1_cm=no)
+    CPPFLAGS="$CPPFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
+  fi
+  if test x$enable_glesv2 = xyes; then
+    PKG_CHECK_MODULES(GLESV2, glesv2, AC_DEFINE(GLESV2, 1, Support for OpenGL ES 2.0 engine), enable_glesv2=no)
+    CPPFLAGS="$CPPFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
+  fi
 fi
 
 if test x$enable_gl = xno -a x$enable_glesv1_cm = xno -a x$enable_glesv2 = xno; then
@@ -59,6 +73,9 @@ AC_ARG_ENABLE(egl-directfb,
 AC_ARG_ENABLE(egl-fbdev,
               AS_HELP_STRING(--disable-egl-fbdev, disable Linux Framebuffer EGL rendering backend),
               enable_egl_fbdev=no, enable_egl_fbdev=yes)
+AC_ARG_ENABLE(egl-wayland,
+              AS_HELP_STRING(--disable-egl-wayland, disable Wayland EGL rendering backend),
+              enable_egl_wayland=no, enable_egl_wayland=yes)
 
 if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
@@ -92,7 +109,8 @@ else
   enable_gl_fbdev=no
 fi
 
-if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$enable_egl_fbdev = xyes; then
+if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$enable_egl_fbdev = xyes ||
+   test x$enable_egl_wayland = xyes; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
     if test x$enable_egl_x11 = xyes; then
@@ -112,17 +130,70 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
     if test x$enable_egl_fbdev = xyes; then
       AC_DEFINE(EGL_FBDEV, 1, Support for EGL with Linux FBDev platform)
     fi
+    if test x$enable_egl_wayland = xyes; then
+      PKG_CHECK_MODULES(WAYLAND, wayland-egl xkbcommon,
+                        AC_DEFINE(EGL_WAYLAND, 1, Support for EGL with Wayland platform),
+                        enable_egl_wayland=no)
+    fi
   else
     enable_egl_x11=no
     enable_egl_directfb=no
     enable_egl_fbdev=no
+    enable_egl_wayland=no
   fi
 fi
 
 if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a \
-        x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno; then
+        x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a \
+        x$enable_egl_wayland = xno; then
   AC_MSG_ERROR(No rendering backends found)
 fi
+
+AC_ARG_ENABLE(efl,
+              AS_HELP_STRING(--disable-efl, disable EFL GUI toolkit),
+              enable_efl=no, enable_efl=yes)
+AC_ARG_ENABLE(glut,
+              AS_HELP_STRING(--disable-glut, disable GLUT GUI toolkit),
+              enable_glut=no, enable_glut=yes)
+AC_ARG_ENABLE(gtk,
+              AS_HELP_STRING(--disable-gtk, disable GTK+ GUI toolkit),
+              enable_gtk=no, enable_gtk=yes)
+AC_ARG_ENABLE(qt,
+              AS_HELP_STRING(--disable-qt, disable Qt GUI toolkit),
+              enable_qt=no, enable_qt=yes)
+AC_ARG_ENABLE(sdl,
+              AS_HELP_STRING(--disable-sdl, disable SDL GUI toolkit),
+              enable_sdl=no, enable_sdl=yes)
+
+if test x$enable_efl = xyes; then
+  PKG_CHECK_MODULES(EFL, elementary, AC_DEFINE(EFL, 1, Support for EFL graphical user interface), enable_efl=no)
+fi
+
+if test x$enable_glut = xyes; then
+  PKG_CHECK_MODULES(GLUT, glut, AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface), enable_glut=no)
+fi
+
+if test x$enable_gtk = xyes; then
+  PKG_CHECK_MODULES(GTK, gtkgl, AC_DEFINE(GTK, 1, Support for GTK+ graphical user interface), enable_gtk=no)
+fi
+
+if test x$enable_qt = xyes; then
+  PKG_CHECK_MODULES(QT, QtGui QtOpenGL, AC_DEFINE(QT, 1, Support for Qt graphical user interface), enable_qt=no)
+fi
+
+if test x$enable_sdl = xyes; then
+  PKG_CHECK_MODULES(SDL, sdl, AC_DEFINE(SDL, 1, Support for SDL graphical user interface), enable_sdl=no)
+fi
+
+if test x$enable_efl = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$enable_qt = xno -a x$enable_sdl = xno; then
+  AC_MSG_WARN(No graphical user interface toolkits found)
+fi
+
+AM_CONDITIONAL(HAVE_GUI, test x$enable_efl = xyes ||
+                         test x$enable_glut = xyes ||
+                         test x$enable_gtk = xyes ||
+                         test x$enable_qt = xyes ||
+                         test x$enable_sdl = xyes)
 
 AC_OUTPUT(Makefile)
 
@@ -135,6 +206,17 @@ echo "  OpenGL Extension to Linux FBDev  $enable_gl_fbdev"
 echo "  EGL with Xlib platform           $enable_egl_x11"
 echo "  EGL with DirectFB platform       $enable_egl_directfb"
 echo "  EGL with Linux FBDev platform    $enable_egl_fbdev"
+echo "  EGL with Wayland platform        $enable_egl_wayland"
+echo
+
+echo
+echo "Toolkits:"
+echo
+echo "  EFL                              $enable_efl"
+echo "  GLUT                             $enable_glut"
+echo "  GTK                              $enable_gtk"
+echo "  QT                               $enable_qt"
+echo "  SDL                              $enable_sdl"
 echo
 
 echo

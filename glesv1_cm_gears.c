@@ -21,23 +21,25 @@
   THE SOFTWARE.
 */
 
-#include <GLES/gl.h>
+#include GLESV1_CM_H
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 /******************************************************************************/
 
-struct strip {
+typedef GLfloat Vertex[6];
+
+typedef struct {
   GLint begin;
   GLsizei count;
-};
+} Strip;
 
 struct gear {
   GLint nvertices;
-  GLfloat *vertices;
+  Vertex *vertices;
   GLint nstrips;
-  struct strip *strips;
+  Strip *strips;
   GLuint vbo;
 };
 
@@ -58,14 +60,14 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   }
 
   gear->nvertices = 0;
-  gear->vertices = calloc(34 * teeth, 6 * sizeof(GLfloat));
+  gear->vertices = calloc(34 * teeth, sizeof(Vertex));
   if (!gear->vertices) {
     printf("calloc vertices failed\n");
     return NULL;
   }
 
   gear->nstrips = 7 * teeth;
-  gear->strips = calloc(gear->nstrips, sizeof(struct strip));
+  gear->strips = calloc(gear->nstrips, sizeof(Strip));
   if (!gear->strips) {
     printf("calloc strips failed\n");
     return NULL;
@@ -83,12 +85,12 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     n[2] = nz;
 
   #define vertex(x, y, z) \
-    gear->vertices[6 * gear->nvertices]     = x; \
-    gear->vertices[6 * gear->nvertices + 1] = y; \
-    gear->vertices[6 * gear->nvertices + 2] = z; \
-    gear->vertices[6 * gear->nvertices + 3] = n[0]; \
-    gear->vertices[6 * gear->nvertices + 4] = n[1]; \
-    gear->vertices[6 * gear->nvertices + 5] = n[2]; \
+    gear->vertices[gear->nvertices][0] = x; \
+    gear->vertices[gear->nvertices][1] = y; \
+    gear->vertices[gear->nvertices][2] = z; \
+    gear->vertices[gear->nvertices][3] = n[0]; \
+    gear->vertices[gear->nvertices][4] = n[1]; \
+    gear->vertices[gear->nvertices][5] = n[2]; \
     gear->nvertices++;
 
   for (i = 0; i < teeth; i++) {
@@ -203,7 +205,7 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glBufferData(GL_ARRAY_BUFFER, gear->nvertices * 6 * sizeof(GLfloat), gear->vertices, GL_STATIC_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
 
   return gear;
 }
@@ -223,8 +225,8 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glVertexPointer(3, GL_FLOAT, 6 * sizeof(GLfloat), NULL);
-  glNormalPointer(GL_FLOAT, 6 * sizeof(GLfloat), (const GLvoid *)(3 * sizeof(GLfloat)));
+  glVertexPointer(3, GL_FLOAT, sizeof(Vertex), NULL);
+  glNormalPointer(GL_FLOAT, sizeof(Vertex), (const GLfloat *)NULL + 3);
 
   glEnableClientState(GL_VERTEX_ARRAY);
   glEnableClientState(GL_NORMAL_ARRAY);
@@ -241,17 +243,9 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
 static void delete_gear(struct gear *gear)
 {
-  if (gear->vbo) {
-    glDeleteBuffers(1, &gear->vbo);
-  }
-
-  if (gear->strips) {
-    free(gear->strips);
-  }
-
-  if (gear->vertices) {
-    free(gear->vertices);
-  }
+  glDeleteBuffers(1, &gear->vbo);
+  free(gear->strips);
+  free(gear->vertices);
 
   free(gear);
 }
@@ -285,6 +279,8 @@ void glesv1_cm_gears_init(int win_width, int win_height)
     return;
   }
 
+  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+
   glMatrixMode(GL_PROJECTION);
 
   glFrustumf(-1, 1, -(GLfloat)win_height/win_width, (GLfloat)win_height/win_width, zNear, zFar);
@@ -314,7 +310,7 @@ void glesv1_cm_gears_draw(float view_tz, float view_rx, float view_ry, float mod
   draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void glesv1_cm_gears_exit()
+void glesv1_cm_gears_term()
 {
   if (gear1) {
     delete_gear(gear1);

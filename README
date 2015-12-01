@@ -10,6 +10,15 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
   - EGL interface with X11 display
   - EGL interface with DirectFB display
   - EGL interface with Linux Framebuffer display
+  - EGL interface with Wayland display
+
+and multiple graphical user interfaces:
+
+  - EFL (Enlightenment Foundation Libraries)
+  - GLUT (OpenGL Utility Toolkit)
+  - GTK+ (Gimp ToolKit)
+  - Qt (Q toolkit)
+  - SDL (Simple Directmedia Layer)
 
 Have fun,
 
