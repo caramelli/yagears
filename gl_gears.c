@@ -25,6 +25,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "engine.h"
 
 /******************************************************************************/
 
@@ -194,7 +195,7 @@ static void delete_gear(struct gear *gear)
 
 /******************************************************************************/
 
-void gl_gears_init(int win_width, int win_height)
+static void gl_gears_init(int win_width, int win_height)
 {
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLdouble zNear = 5, zFar = 60;
@@ -230,7 +231,7 @@ void gl_gears_init(int win_width, int win_height)
   glMatrixMode(GL_MODELVIEW);
 }
 
-void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
+static void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
 {
   const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
@@ -252,19 +253,32 @@ void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
   draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void gl_gears_term()
+static void gl_gears_term()
 {
   if (gear1) {
     delete_gear(gear1);
+    gear1 = NULL;
   }
 
   if (gear2) {
     delete_gear(gear2);
+    gear2 = NULL;
   }
 
   if (gear3) {
     delete_gear(gear3);
+    gear3 = NULL;
   }
 
   printf("%s\n", glGetString(GL_VERSION));
 }
+
+/******************************************************************************/
+
+Engine GL_Engine = {
+  "gl",
+  0,
+  gl_gears_init,
+  gl_gears_draw,
+  gl_gears_term
+};

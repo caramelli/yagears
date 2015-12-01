@@ -54,7 +54,7 @@
 #include <linux/input.h>
 #endif
 #if defined(EGL_WAYLAND)
-#include <wayland-egl.h>
+#include <wayland-client.h>
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
@@ -62,82 +62,37 @@
 #include <EGL/egl.h>
 #endif
 
+#include "engine.h"
+
 #if defined(GL)
-#include "gl_gears.h"
+extern Engine GL_Engine;
 #endif
 #if defined(GLESV1_CM)
-#include "glesv1_cm_gears.h"
+extern Engine GLESV1_CM_Engine;
 #endif
 #if defined(GLESV2)
-#include "glesv2_gears.h"
+extern Engine GLESV2_Engine;
 #endif
+
+static Engine *engines[] = {
+  #if defined(GL)
+  &GL_Engine,
+  #endif
+  #if defined(GLESV1_CM)
+  &GLESV1_CM_Engine,
+  #endif
+  #if defined(GLESV2)
+  &GLESV2_Engine,
+  #endif
+};
 
 /******************************************************************************/
 
 static char *backend = NULL;
-static char *engine = NULL;
+static Engine *engine = NULL;
 
 static int loop = 1, animate = 1, redisplay = 1, win_width = 0, win_height = 0;
 static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 0.0;
-
-/******************************************************************************/
-
-static void init()
-{
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_init(win_width, win_height);
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_init(win_width, win_height);
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_init(win_width, win_height);
-  }
-  #endif
-}
-
-static void draw()
-{
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-}
-
-static void term()
-{
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_term();
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_term();
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_term();
-  }
-  #endif
-}
 
 /******************************************************************************/
 
@@ -244,6 +199,13 @@ static void dfb_keyboard_handle_key(DFBInputEvent *event)
 #endif
 
 #if defined(GL_FBDEV) || defined(EGL_FBDEV)
+struct fb_window {
+  int width;
+  int height;
+  int posx;
+  int posy;
+};
+
 static void fb_keyboard_handle_key(struct input_event *event)
 {
   switch (event->code) {
@@ -288,6 +250,16 @@ static void fb_keyboard_handle_key(struct input_event *event)
 #endif
 
 #if defined(EGL_WAYLAND)
+struct wl_window {
+  struct wl_surface *surface;
+  int width;
+  int height;
+  int dx;
+  int dy;
+  int attached_width;
+  int attached_height;
+};
+
 struct wl_data {
   int width;
   int height;
@@ -447,14 +419,14 @@ static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_g
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_SUCCESS;
-  char backends[64], *backend_arg = NULL, engines[64], *engine_arg = NULL, *c;
+  char backends[64], *backend_arg = NULL, *engine_arg = NULL, *c;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 
   #if defined(GL_X11) || defined(EGL_X11)
   Display *x11_dpy = NULL;
   Window x11_win = 0;
-  int x11_event_mask = 0;
+  int x11_event_mask = NoEventMask;
   XEvent x11_event;
   #endif
   #if defined(GL_X11)
@@ -480,13 +452,14 @@ int main(int argc, char *argv[])
   int fb_dpy = -1;
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
-  void *fb_win = NULL;
-  int fb_input = -1;
+  struct fb_window *fb_win = NULL;
+  int fb_keyboard = -1;
   struct input_event fb_event;
   #endif
   #if defined(GL_FBDEV)
-  void *fb_buffer = NULL;
+  void *fb_addr = NULL;
   GLFBDevVisualPtr fb_visual = NULL;
+  GLFBDevBufferPtr fb_buffer = NULL;
   int fb_attr[4];
   GLFBDevContextPtr fb_ctx = NULL;
   int glfbdev_depth_size = 0;
@@ -496,7 +469,7 @@ int main(int argc, char *argv[])
   struct wl_data wl_data;
   struct wl_surface *wl_surface = NULL;
   struct wl_shell_surface *wl_shell_surface = NULL;
-  struct wl_egl_window *wl_win = NULL;
+  struct wl_window *wl_win = NULL;
   #endif
 
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
@@ -535,17 +508,6 @@ int main(int argc, char *argv[])
   strcat(backends, "egl-wayland ");
   #endif
 
-  memset(engines, 0, sizeof(engines));
-  #if defined(GL)
-  strcat(engines, "gl ");
-  #endif
-  #if defined(GLESV1_CM)
-  strcat(engines, "glesv1_cm ");
-  #endif
-  #if defined(GLESV2)
-  strcat(engines, "glesv2 ");
-  #endif
-
   while ((opt = getopt(argc, argv, "b:e:h")) != -1) {
     switch (opt) {
       case 'b':
@@ -563,7 +525,11 @@ int main(int argc, char *argv[])
   if (argc != 5 || !backend_arg || !engine_arg) {
     printf("\n\tUsage: %s -b backend -e engine\n\n", argv[0]);
     printf("\t\tbackends: %s\n\n", backends);
-    printf("\t\tengines:  %s\n\n", engines);
+    printf("\t\tengines:  ");
+    for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
+      printf("%s ", engines[opt]->name);
+    }
+    printf("\n\n");
     return EXIT_FAILURE;
   }
 
@@ -581,16 +547,13 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  engine = engines;
-  while ((c = strchr(engine, ' '))) {
-    *c = '\0';
-    if (!strcmp(engine, engine_arg))
+  for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
+    engine = engines[opt];
+    if (!strcmp(engine->name, engine_arg))
       break;
-    else
-      engine = c + 1;
   }
 
-  if (!c) {
+  if (opt == sizeof(engines) / sizeof(Engine *)) {
     printf("%s: engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
@@ -605,6 +568,9 @@ int main(int argc, char *argv[])
       ret = EXIT_FAILURE;
       goto out;
     }
+
+    XCloseDisplay(x11_dpy);
+    x11_dpy = XOpenDisplay(NULL);
 
     win_width = DisplayWidth(x11_dpy, 0);
     win_height = DisplayHeight(x11_dpy, 0);
@@ -622,13 +588,6 @@ int main(int argc, char *argv[])
     err = DirectFBCreate(&dfb_dpy);
     if (err) {
       printf("DirectFBCreate failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
-      goto out;
-    }
-
-    err = dfb_dpy->SetCooperativeLevel(dfb_dpy, DFSCL_FULLSCREEN);
-    if (err) {
-      printf("SetCooperativeLevel failed: %s\n", DirectFBErrorString(err));
       ret = EXIT_FAILURE;
       goto out;
     }
@@ -731,6 +690,14 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  if (getenv("WIDTH")) {
+    win_width = atoi(getenv("WIDTH"));
+  }
+
+  if (getenv("HEIGHT")) {
+    win_height = atoi(getenv("HEIGHT"));
+  }
+
   #if defined(EGL_X11)
   if (!strcmp(backend, "egl-x11")) {
     setenv("EGL_PLATFORM", "x11", 1);
@@ -799,6 +766,20 @@ int main(int argc, char *argv[])
       ret = EXIT_FAILURE;
       goto out;
     }
+
+    fb_addr = mmap(NULL, fb_finfo.smem_len, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
+    if (fb_addr == MAP_FAILED) {
+      printf("mmap failed: %s\n", strerror(errno));
+      ret = EXIT_FAILURE;
+      goto out;
+    }
+
+    fb_buffer = glFBDevCreateBuffer(&fb_finfo, &fb_vinfo, fb_visual, fb_addr, NULL, fb_finfo.smem_len);
+    if (!fb_buffer) {
+      printf("glFBDevCreateBuffer failed\n");
+      ret = EXIT_FAILURE;
+      goto out;
+    }
   }
   #endif
 
@@ -811,8 +792,7 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    #if defined(GL)
-    if (!strcmp(engine, "gl")) {
+    if (!engine->version) {
       err = eglBindAPI(EGL_OPENGL_API);
       if (!err) {
         printf("eglBindAPI failed: 0x%x\n", eglGetError());
@@ -820,7 +800,6 @@ int main(int argc, char *argv[])
         goto out;
       }
     }
-    #endif
 
     egl_config_attr[0] = EGL_DEPTH_SIZE;
     egl_config_attr[1] = 1;
@@ -865,7 +844,6 @@ int main(int argc, char *argv[])
 
     XMapWindow(x11_dpy, x11_win);
 
-    redisplay = 0;
     x11_event_mask = ExposureMask;
     XSelectInput(x11_dpy, x11_win, x11_event_mask);
   }
@@ -873,8 +851,10 @@ int main(int argc, char *argv[])
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
     memset(&dfb_desc, 0, sizeof(DFBSurfaceDescription));
-    dfb_desc.flags = DSDESC_CAPS;
+    dfb_desc.flags = DSDESC_CAPS | DSDESC_WIDTH | DSDESC_HEIGHT;
     dfb_desc.caps = DSCAPS_PRIMARY | dfb_attr;
+    dfb_desc.width = win_width;
+    dfb_desc.height = win_height;
     err = dfb_dpy->CreateSurface(dfb_dpy, &dfb_desc, &dfb_win);
     if (err) {
       printf("CreateSurface failed: %s\n", DirectFBErrorString(err));
@@ -883,20 +863,17 @@ int main(int argc, char *argv[])
     }
   }
   #endif
-  #if defined(GL_FBDEV)
+  #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
-    fb_buffer = mmap(NULL, fb_finfo.smem_len, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
-    if (fb_buffer == MAP_FAILED) {
-      printf("mmap failed: %s\n", strerror(errno));
+    fb_win = calloc(1, sizeof(struct fb_window));
+    if (!fb_win) {
+      printf("fb_window calloc failed\n");
       ret = EXIT_FAILURE;
       goto out;
     }
-
-    fb_win = glFBDevCreateBuffer(&fb_finfo, &fb_vinfo, fb_visual, fb_buffer, NULL, fb_finfo.smem_len);
-    if (!fb_win) {
-      printf("glFBDevCreateBuffer failed\n");
-      ret = EXIT_FAILURE;
-      goto out;
+    else {
+      fb_win->width = win_width;
+      fb_win->height = win_height;
     }
   }
   #endif
@@ -909,11 +886,16 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    wl_win = wl_egl_window_create(wl_surface, win_width, win_height);
+    wl_win = calloc(1, sizeof(struct wl_window));
     if (!wl_win) {
-      printf("wl_egl_window_create failed\n");
+      printf("wl_window calloc failed\n");
       ret = EXIT_FAILURE;
       goto out;
+    }
+    else {
+      wl_win->surface = wl_surface;
+      wl_win->width = win_width;
+      wl_win->height = win_height;
     }
 
     wl_shell_surface = wl_shell_get_shell_surface(wl_data.wl_shell, wl_surface);
@@ -995,6 +977,8 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
+    glFBDevSetWindow(fb_buffer, fb_win);
+
     fb_ctx = glFBDevCreateContext(fb_visual, NULL);
     if (!fb_ctx) {
       printf("glFBDevCreateContext failed\n");
@@ -1002,7 +986,7 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    err = glFBDevMakeCurrent(fb_ctx, fb_win, fb_win);
+    err = glFBDevMakeCurrent(fb_ctx, fb_buffer, fb_buffer);
     if (!err) {
       printf("glFBDevMakeCurrent failed\n");
       ret = EXIT_FAILURE;
@@ -1013,18 +997,13 @@ int main(int argc, char *argv[])
 
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
-    #if defined(GL) || defined(GLESV1_CM)
-    if (!strcmp(engine, "gl") || !strcmp(engine, "glesv1_cm")) {
-      egl_ctx_attr[0] = EGL_NONE;
+    opt = 0;
+    memset(egl_ctx_attr, 0, sizeof(egl_ctx_attr));
+    if (engine->version == 2) {
+      egl_ctx_attr[opt++] = EGL_CONTEXT_CLIENT_VERSION;
+      egl_ctx_attr[opt++] = engine->version;
     }
-    #endif
-    #if defined(GLESV2)
-    if (!strcmp(engine, "glesv2")) {
-      egl_ctx_attr[0] = EGL_CONTEXT_CLIENT_VERSION;
-      egl_ctx_attr[1] = 2;
-      egl_ctx_attr[2] = EGL_NONE;
-    }
-    #endif
+    egl_ctx_attr[opt] = EGL_NONE;
     egl_ctx = eglCreateContext(egl_dpy, egl_config, EGL_NO_CONTEXT, egl_ctx_attr);
     if (!egl_ctx) {
       printf("eglCreateContext failed: 0x%x\n", eglGetError());
@@ -1068,17 +1047,17 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    if (getenv("EVDEV")) {
-      fb_input = open(getenv("EVDEV"), O_RDONLY | O_NONBLOCK);
-      if (fb_input == -1) {
-        printf("open %s failed: %s\n", getenv("EVDEV"), strerror(errno));
+    if (getenv("KEYBOARD")) {
+      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+      if (fb_keyboard == -1) {
+        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
         ret = EXIT_FAILURE;
         goto out;
       }
     }
     else {
-      fb_input = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (fb_input == -1) {
+      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+      if (fb_keyboard == -1) {
         printf("open %s failed: %s\n", "/dev/input/event0", strerror(errno));
         ret = EXIT_FAILURE;
         goto out;
@@ -1097,9 +1076,13 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  /* drawing */
+  /* drawing (main event loop) */
 
-  init();
+  engine->init(win_width, win_height);
+
+  if (getenv("NO_ANIM")) {
+    animate = 0;
+  }
 
   signal(SIGINT, sighandler);
 
@@ -1135,7 +1118,7 @@ int main(int argc, char *argv[])
     }
 
     if (redisplay) {
-      draw();
+      engine->draw(view_tz, view_rx, view_ry, model_rz);
 
       if (animate) {
         frames++;
@@ -1153,7 +1136,7 @@ int main(int argc, char *argv[])
       #endif
       #if defined(GL_FBDEV)
       if (!strcmp(backend, "gl-fbdev")) {
-        glFBDevSwapBuffers(fb_win);
+        glFBDevSwapBuffers(fb_buffer);
       }
       #endif
 
@@ -1192,7 +1175,7 @@ int main(int argc, char *argv[])
     #endif
     #if defined(GL_FBDEV) || defined(EGL_FBDEV)
     if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-      read(fb_input, &fb_event, sizeof(struct input_event));
+      read(fb_keyboard, &fb_event, sizeof(struct input_event));
       if (fb_event.type == EV_KEY) {
         if (fb_event.value) {
           fb_keyboard_handle_key(&fb_event);
@@ -1207,7 +1190,7 @@ int main(int argc, char *argv[])
     #endif
   }
 
-  term();
+  engine->term();
 
   /* print info */
 
@@ -1267,8 +1250,8 @@ out:
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    if (fb_input != -1) {
-      close(fb_input);
+    if (fb_keyboard != -1) {
+      close(fb_keyboard);
     }
   }
   #endif
@@ -1382,12 +1365,12 @@ out:
   #endif
   #if defined(GL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
-    if (fb_win) {
-      glFBDevDestroyBuffer(fb_win);
+    if (fb_buffer) {
+      glFBDevDestroyBuffer(fb_buffer);
     }
 
-    if (fb_buffer) {
-      munmap(fb_buffer, fb_finfo.smem_len);
+    if (fb_addr) {
+      munmap(fb_addr, fb_finfo.smem_len);
     }
 
     if (fb_visual) {
@@ -1397,6 +1380,10 @@ out:
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+    if (fb_win) {
+      free(fb_win);
+    }
+
     if (fb_dpy != -1) {
       close(fb_dpy);
     }
@@ -1409,7 +1396,7 @@ out:
     }
 
     if (wl_win) {
-      wl_egl_window_destroy(wl_win);
+      free(wl_win);
     }
 
     if (wl_surface) {

@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "engine.h"
 
 static void identity(GLfloat *a)
 {
@@ -349,7 +350,7 @@ static void delete_gear(struct gear *gear)
 
 /******************************************************************************/
 
-void glesv2_gears_init(int win_width, int win_height)
+static void glesv2_gears_init(int win_width, int win_height)
 {
   const char *vertShaderSource =
     "attribute vec3 a_Vertex;\n"
@@ -495,7 +496,7 @@ void glesv2_gears_init(int win_width, int win_height)
   Projection[14] = -2 * zFar * zNear / (zFar - zNear);
 }
 
-void glesv2_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
+static void glesv2_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
 {
   const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
@@ -517,18 +518,21 @@ void glesv2_gears_draw(float view_tz, float view_rx, float view_ry, float model_
   draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-void glesv2_gears_term()
+static void glesv2_gears_term()
 {
   if (gear1) {
     delete_gear(gear1);
+    gear1 = NULL;
   }
 
   if (gear2) {
     delete_gear(gear2);
+    gear2 = NULL;
   }
 
   if (gear3) {
     delete_gear(gear3);
+    gear3 = NULL;
   }
 
   if (fragShader) {
@@ -546,3 +550,13 @@ void glesv2_gears_term()
   printf("%s\n", glGetString(GL_VERSION));
   printf("%s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 }
+
+/******************************************************************************/
+
+Engine GLESV2_Engine = {
+  "glesv2",
+  2,
+  glesv2_gears_init,
+  glesv2_gears_draw,
+  glesv2_gears_term
+};

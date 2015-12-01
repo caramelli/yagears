@@ -46,95 +46,54 @@
 #endif
 #if defined(SDL)
 #include <SDL.h>
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+static void SDL_Display(SDL_Window *window);
+#else
 static void SDL_Display();
 #endif
+#endif
+
+#include "engine.h"
 
 #if defined(GL)
-#include "gl_gears.h"
+extern Engine GL_Engine;
 #endif
 #if defined(GLESV1_CM)
-#include "glesv1_cm_gears.h"
+extern Engine GLESV1_CM_Engine;
 #endif
 #if defined(GLESV2)
-#include "glesv2_gears.h"
+extern Engine GLESV2_Engine;
 #endif
+
+static Engine *engines[] = {
+  #if defined(GL)
+  &GL_Engine,
+  #endif
+  #if defined(GLESV1_CM)
+  &GLESV1_CM_Engine,
+  #endif
+  #if defined(GLESV2)
+  &GLESV2_Engine,
+  #endif
+};
 
 /******************************************************************************/
 
 static char *toolkit = NULL;
-static char *engine = NULL;
+static Engine *engine = NULL;
 
 static int loop = 0, animate = 1, t_rate = 0, t_rot = 0, frames = 0, win_width = 0, win_height = 0;
 static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 0.0;
 
 /******************************************************************************/
 
-static void init()
-{
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_init(win_width, win_height);
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_init(win_width, win_height);
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_init(win_width, win_height);
-  }
-  #endif
-}
-
-static void draw()
+static int current_time()
 {
   struct timeval tv;
 
-  if (animate && !frames) {
-    gettimeofday(&tv, NULL);
-    t_rate = t_rot = tv.tv_sec * 1000 + tv.tv_usec / 1000;
-  }
+  gettimeofday(&tv, NULL);
 
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_draw(view_tz, view_rx, view_ry, model_rz);
-  }
-  #endif
-
-  if (animate) {
-    frames++;
-  }
-}
-
-static void term()
-{
-  #if defined(GL)
-  if (!strcmp(engine, "gl")) {
-    gl_gears_term();
-  }
-  #endif
-  #if defined(GLESV1_CM)
-  if (!strcmp(engine, "glesv1_cm")) {
-    glesv1_cm_gears_term();
-  }
-  #endif
-  #if defined(GLESV2)
-  if (!strcmp(engine, "glesv2")) {
-    glesv2_gears_term();
-  }
-  #endif
+  return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
 /******************************************************************************/
@@ -142,15 +101,13 @@ static void term()
 static void idle(void *widget)
 {
   int t;
-  struct timeval tv;
 
   if (animate) {
     if (!frames) {
       return;
     }
 
-    gettimeofday(&tv, NULL);
-    t = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    t = current_time();
 
     if (t - t_rate >= 2000) {
       loop++;
@@ -175,7 +132,7 @@ static void idle(void *widget)
     #endif
     #if defined(GTK)
     if (!strcmp(toolkit, "gtk")) {
-      gdk_window_invalidate_rect(((GtkWidget *)widget)->window, &((GtkWidget *)widget)->allocation, FALSE);
+      gtk_widget_draw((GtkWidget *)widget, NULL);
     }
     #endif
     #if defined(QT)
@@ -185,7 +142,11 @@ static void idle(void *widget)
     #endif
     #if defined(SDL)
     if (!strcmp(toolkit, "sdl")) {
+      #if SDL_VERSION_ATLEAST(2, 0, 0)
+      SDL_Display((SDL_Window *)widget);
+      #else
       SDL_Display();
+      #endif
     }
     #endif
   }
@@ -199,16 +160,11 @@ static void idle(void *widget)
 /******************************************************************************/
 
 #if defined(EFL)
-static Ecore_Animator *ecore_animator_id = NULL;
-
-static void elm_glview_init(Evas_Object *object)
-{
-  init();
-}
-
 static void elm_glview_render(Evas_Object *object)
 {
-  draw();
+  if (animate && !frames) t_rate = t_rot = current_time();
+  engine->draw(view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
 }
 
 static Eina_Bool ecore_animator(void *data)
@@ -221,8 +177,7 @@ static Eina_Bool ecore_animator(void *data)
 static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
 {
   if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Escape")) {
-    ecore_animator_del(ecore_animator_id);
-    term();
+    ecore_animator_del((Ecore_Animator *)evas_object_data_get((Evas_Object *)widget, "animator"));
     elm_exit();
     return EINA_TRUE;
   }
@@ -264,16 +219,11 @@ static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
 #endif
 
 #if defined(GLUT)
-static int glut_win = 0;
-
-static void glutReshape(int width, int height)
-{
-  init();
-}
-
 static void glutDisplay()
 {
-  draw();
+  if (animate && !frames) t_rate = t_rot = current_time();
+  engine->draw(view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
   glutSwapBuffers();
 }
 
@@ -287,8 +237,7 @@ static void glutKeyboard(unsigned char key, int x, int y)
   switch (key) {
     case 27:
       glutIdleFunc(NULL);
-      term();
-      glutDestroyWindow(glut_win);
+      glutLeaveMainLoop();
       break;
     case ' ':
       animate = !animate;
@@ -333,20 +282,16 @@ static void glutSpecial(int key, int x, int y)
 #endif
 
 #if defined(GTK)
-static guint gtk_idle_id = 0;
-
-static gboolean gtk_configure_event(GtkWidget *widget, GdkEventConfigure *event, gpointer data)
-{
-  gdk_gl_drawable_gl_begin(gtk_widget_get_gl_drawable(widget), gtk_widget_get_gl_context(widget));
-  init();
-
-  return TRUE;
-}
-
 static gboolean gtk_expose_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 {
-  draw();
+  if (animate && !frames) t_rate = t_rot = current_time();
+  engine->draw(view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+  #ifndef GTKGLEXT_CHECK_VERSION
+  gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
+  #else
   gdk_gl_drawable_swap_buffers(gtk_widget_get_gl_drawable(widget));
+  #endif
 
   return TRUE;
 }
@@ -362,14 +307,13 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
 {
   switch (event->keyval) {
     case GDK_Escape:
-      g_source_remove(gtk_idle_id);
-      term();
+      g_source_remove(*(guint *)data);
       gtk_main_quit();
       return TRUE;
     case SDLK_SPACE:
       animate = !animate;
       if (animate) {
-        gdk_window_invalidate_rect(widget->window, &widget->allocation, FALSE);
+        gtk_widget_draw(widget, NULL);
       }
       return TRUE;
     case GDK_Page_Down:
@@ -395,7 +339,7 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
   }
 
   if (!animate) {
-    gdk_window_invalidate_rect(widget->window, &widget->allocation, FALSE);
+    gtk_widget_draw(widget, NULL);
   }
 
   return TRUE;
@@ -403,17 +347,19 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
 #endif
 
 #if defined(QT)
-static int qt_timer_id = 0;
-
 class QtGLWidget : public QGLWidget {
+int qt_timer_id;
+
 void initializeGL()
 {
-  init();
+  qt_timer_id = startTimer(0);
 }
 
 void paintGL()
 {
-  draw();
+  if (animate && !frames) t_rate = t_rot = current_time();
+  engine->draw(view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
 }
 
 void timerEvent(QTimerEvent *event)
@@ -426,7 +372,6 @@ void keyPressEvent(QKeyEvent *event)
   switch (event->key()) {
     case Qt::Key_Escape:
       killTimer(qt_timer_id);
-      term();
       close();
       return;
     case Qt::Key_Space:
@@ -465,30 +410,44 @@ void keyPressEvent(QKeyEvent *event)
 #endif
 
 #if defined(SDL)
-static int sdl_idle_id = 1;
-
-static void SDL_Reshape()
-{
-  init();
-}
-
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+static void SDL_Display(SDL_Window *window)
+#else
 static void SDL_Display()
+#endif
 {
-  draw();
+  if (animate && !frames) t_rate = t_rot = current_time();
+  engine->draw(view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+  #if SDL_VERSION_ATLEAST(2, 0, 0)
+  SDL_GL_SwapWindow(window);
+  #else
   SDL_GL_SwapBuffers();
+  #endif
 }
 
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+static void SDL_Idle(SDL_Window *window)
+#else
 static void SDL_Idle()
+#endif
 {
+  #if SDL_VERSION_ATLEAST(2, 0, 0)
+  idle(window);
+  #else
   idle(NULL);
+  #endif
 }
 
-static void SDL_KeyDownEvent(SDL_Event *event)
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+static void SDL_KeyDownEvent(SDL_Window *window, SDL_Event *event, void *data)
+#else
+static void SDL_KeyDownEvent(SDL_Event *event, void *data)
+#endif
 {
   switch (event->key.keysym.sym) {
     case SDLK_ESCAPE:
-      sdl_idle_id = 0;
-      term();
+      *(int *)data = 0;
       SDL_Event quit;
       quit.type = SDL_USEREVENT;
       SDL_PushEvent(&quit);
@@ -496,7 +455,11 @@ static void SDL_KeyDownEvent(SDL_Event *event)
     case SDLK_SPACE:
       animate = !animate;
       if (animate) {
+        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        SDL_Display(window);
+        #else
         SDL_Display();
+        #endif
       }
       return;
     case SDLK_PAGEDOWN:
@@ -522,7 +485,11 @@ static void SDL_KeyDownEvent(SDL_Event *event)
   }
 
   if (!animate) {
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    SDL_Display(window);
+    #else
     SDL_Display();
+    #endif
   }
 }
 #endif
@@ -531,8 +498,31 @@ static void SDL_KeyDownEvent(SDL_Event *event)
 
 int main(int argc, char *argv[])
 {
-  char toolkits[64], *toolkit_arg = NULL, engines[64], *engine_arg = NULL, *c;
+  char toolkits[64], *toolkit_arg = NULL, *engine_arg = NULL, *c;
   int opt;
+  #if defined(EFL)
+  Evas_Object *elm_win;
+  Ecore_Animator *ecore_animator_id;
+  #endif
+  #if defined(GLUT)
+  int glut_win;
+  #endif
+  #if defined(GTK)
+  GtkWidget *gtk_win;
+  guint gtk_idle_id;
+  #endif
+  #if defined(QT)
+  QApplication *qt_app;
+  QtGLWidget *qt_win;
+  #endif
+  #if defined(SDL)
+  #if SDL_VERSION_ATLEAST(2, 0, 0)
+  SDL_Window *sdl_win;
+  #else
+  SDL_Surface *sdl_win;
+  #endif
+  int sdl_idle_id;
+  #endif
 
   /* process command line */
 
@@ -553,17 +543,6 @@ int main(int argc, char *argv[])
   strcat(toolkits, "sdl ");
   #endif
 
-  memset(engines, 0, sizeof(engines));
-  #if defined(GL)
-  strcat(engines, "gl ");
-  #endif
-  #if defined(GLESV1_CM)
-  strcat(engines, "glesv1_cm ");
-  #endif
-  #if defined(GLESV2)
-  strcat(engines, "glesv2 ");
-  #endif
-
   while ((opt = getopt(argc, argv, "t:e:h")) != -1) {
     switch (opt) {
       case 't':
@@ -581,7 +560,11 @@ int main(int argc, char *argv[])
   if (argc != 5 || !toolkit_arg || !engine_arg) {
     printf("\n\tUsage: %s -t toolkit -e engine\n\n", argv[0]);
     printf("\t\ttoolkits: %s\n\n", toolkits);
-    printf("\t\tengines:  %s\n\n", engines);
+    printf("\t\tengines:  ");
+    for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
+      printf("%s ", engines[opt]->name);
+    }
+    printf("\n\n");
     return EXIT_FAILURE;
   }
 
@@ -599,23 +582,20 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  engine = engines;
-  while ((c = strchr(engine, ' '))) {
-    *c = '\0';
-    if (!strcmp(engine, engine_arg))
+  for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
+    engine = engines[opt];
+    if (!strcmp(engine->name, engine_arg))
       break;
-    else
-      engine = c + 1;
   }
 
-  if (!c) {
+  if (opt == sizeof(engines) / sizeof(Engine *)) {
     printf("%s: engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
 
   argc = 1;
 
-  /* EFL toolkit */
+  /* Toolkit init */
 
   #if defined(EFL)
   if (!strcmp(toolkit, "efl")) {
@@ -624,24 +604,8 @@ int main(int argc, char *argv[])
     Ecore_Evas *ee = ecore_evas_new(NULL, 0, 0, 0, 0, NULL);
     ecore_evas_screen_geometry_get(ee, 0, 0, &win_width, &win_height);
     ecore_evas_free(ee);
-
-    Evas_Object *elm_win = elm_win_add(NULL, NULL, ELM_WIN_BASIC);
-    Evas_Object *elm_glview = elm_glview_add(elm_win);
-    elm_glview_mode_set(elm_glview, ELM_GLVIEW_DEPTH);
-    elm_glview_init_func_set(elm_glview, elm_glview_init);
-    elm_glview_render_func_set(elm_glview, elm_glview_render);
-    elm_win_resize_object_add(elm_win, elm_glview);
-    ecore_animator_id = ecore_animator_add(ecore_animator, elm_glview);
-    ecore_event_handler_add(ECORE_EVENT_KEY_DOWN, ecore_event_key_down, elm_glview);
-    evas_object_resize(elm_win, win_width, win_height);
-    evas_object_show(elm_glview);
-    evas_object_show(elm_win);
-
-    elm_run();
   }
   #endif
-
-  /* GLUT toolkit */
 
   #if defined(GLUT)
   if (!strcmp(toolkit, "glut")) {
@@ -649,21 +613,8 @@ int main(int argc, char *argv[])
 
     win_width = glutGet(GLUT_SCREEN_WIDTH);
     win_height = glutGet(GLUT_SCREEN_HEIGHT);
-
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);
-    glutInitWindowSize(win_width, win_height);
-    glut_win = glutCreateWindow(NULL);
-    glutReshapeFunc(glutReshape);
-    glutDisplayFunc(glutDisplay);
-    glutIdleFunc(glutIdle);
-    glutKeyboardFunc(glutKeyboard);
-    glutSpecialFunc(glutSpecial);
-
-    glutMainLoop();
   }
   #endif
-
-  /* GTK+ toolkit */
 
   #if defined(GTK)
   if (!strcmp(toolkit, "gtk")) {
@@ -671,63 +622,176 @@ int main(int argc, char *argv[])
 
     win_width = gdk_screen_width();
     win_height = gdk_screen_height();
-
-    GtkWidget *gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    GdkGLConfig *gdk_glconfig = gdk_gl_config_new_by_mode((GdkGLConfigMode)(GDK_GL_MODE_DOUBLE | GDK_GL_MODE_DEPTH));
-    GtkWidget *gtk_drawing_area = gtk_drawing_area_new();
-    gtk_widget_set_gl_capability(gtk_drawing_area, gdk_glconfig, NULL, TRUE, GDK_GL_RGBA_TYPE);
-    g_signal_connect(gtk_drawing_area, "configure_event", G_CALLBACK(gtk_configure_event), NULL);
-    g_signal_connect(gtk_drawing_area, "expose_event", G_CALLBACK(gtk_expose_event), NULL);
-    gtk_container_add(GTK_CONTAINER(gtk_win), gtk_drawing_area);
-    gtk_idle_id = g_idle_add(gtk_idle, gtk_drawing_area);
-    g_signal_connect_swapped(gtk_win, "key_press_event", G_CALLBACK(gtk_key_press_event), gtk_drawing_area);
-    gtk_widget_set_size_request(gtk_drawing_area, win_width, win_height);
-    gtk_widget_show(gtk_drawing_area);
-    gtk_widget_show(gtk_win);
-
-    gtk_main();
   }
   #endif
-
-  /* Qt toolkit */
 
   #if defined(QT)
   if (!strcmp(toolkit, "qt")) {
-    QApplication qt_app(argc, argv);
+    qt_app = new QApplication(argc, argv);
 
-    win_width = qt_app.desktop()->width();
-    win_height = qt_app.desktop()->height();
-
-    QtGLWidget qt_win;
-    qt_timer_id = qt_win.startTimer(0);
-    qt_win.resize(win_width, win_height);
-    qt_win.show();
-
-    qt_app.exec();
+    win_width = qt_app->desktop()->width();
+    win_height = qt_app->desktop()->height();
   }
   #endif
-
-  /* SDL toolkit */
 
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
     SDL_Init(SDL_INIT_VIDEO);
 
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    SDL_DisplayMode sdl_mode;
+    SDL_GetDisplayMode(0, 0, &sdl_mode);
+    win_width = sdl_mode.w;
+    win_height = sdl_mode.h;
+    #else
     SDL_Rect **sdl_mode = SDL_ListModes(NULL, SDL_FULLSCREEN);
     win_width = sdl_mode[0]->w;
     win_height = sdl_mode[0]->h;
+    #endif
+  }
+  #endif
 
-    SDL_Surface *sdl_win = SDL_SetVideoMode(win_width, win_height, 0, SDL_OPENGL);
-    SDL_Reshape();
+  if (getenv("WIDTH")) {
+    win_width = atoi(getenv("WIDTH"));
+  }
+
+  if (getenv("HEIGHT")) {
+    win_height = atoi(getenv("HEIGHT"));
+  }
+
+  /* Toolkit window */
+
+  #if defined(EFL)
+  if (!strcmp(toolkit, "efl")) {
+    elm_win = elm_win_add(NULL, NULL, ELM_WIN_BASIC);
+    Evas_Object *elm_glview = elm_glview_add(elm_win);
+    elm_glview_mode_set(elm_glview, ELM_GLVIEW_DEPTH);
+    elm_glview_render_func_set(elm_glview, elm_glview_render);
+    elm_win_resize_object_add(elm_win, elm_glview);
+    ecore_animator_id = ecore_animator_add(ecore_animator, elm_glview);
+    evas_object_data_set(elm_glview, "animator", ecore_animator_id);
+    ecore_event_handler_add(ECORE_EVENT_KEY_DOWN, ecore_event_key_down, elm_glview);
+    evas_object_resize(elm_win, win_width, win_height);
+    evas_object_show(elm_glview);
+    evas_object_show(elm_win);
+  }
+  #endif
+
+  #if defined(GLUT)
+  if (!strcmp(toolkit, "glut")) {
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);
+    glutInitWindowSize(win_width, win_height);
+    glut_win = glutCreateWindow(NULL);
+    glutDisplayFunc(glutDisplay);
+    glutIdleFunc(glutIdle);
+    glutKeyboardFunc(glutKeyboard);
+    glutSpecialFunc(glutSpecial);
+  }
+  #endif
+
+  #if defined(GTK)
+  if (!strcmp(toolkit, "gtk")) {
+    gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    GtkWidget *gtk_drawing_area;
+    #ifndef GTKGLEXT_CHECK_VERSION
+    int gdk_glconfig[] = { GDK_GL_RGBA, GDK_GL_DOUBLEBUFFER, GDK_GL_DEPTH_SIZE,1, GDK_GL_NONE };
+    gtk_drawing_area = gtk_gl_area_new(gdk_glconfig);
+    #else
+    GdkGLConfig *gdk_glconfig = gdk_gl_config_new_by_mode((GdkGLConfigMode)(GDK_GL_MODE_DOUBLE | GDK_GL_MODE_DEPTH));
+    gtk_drawing_area = gtk_drawing_area_new();
+    gtk_widget_set_gl_capability(gtk_drawing_area, gdk_glconfig, NULL, TRUE, GDK_GL_RGBA_TYPE);
+    #endif
+    g_signal_connect(gtk_drawing_area, "expose_event", G_CALLBACK(gtk_expose_event), NULL);
+    gtk_container_add(GTK_CONTAINER(gtk_win), gtk_drawing_area);
+    gtk_idle_id = g_idle_add(gtk_idle, gtk_drawing_area);
+    g_signal_connect(gtk_win, "key_press_event", G_CALLBACK(gtk_key_press_event), &gtk_idle_id);
+    gtk_widget_set_size_request(gtk_drawing_area, win_width, win_height);
+    gtk_widget_show(gtk_drawing_area);
+    gtk_widget_show(gtk_win);
+    #ifndef GTKGLEXT_CHECK_VERSION
+    gtk_gl_area_make_current(GTK_GL_AREA(gtk_drawing_area));
+    #else
+    gdk_gl_drawable_gl_begin(gtk_widget_get_gl_drawable(gtk_drawing_area), gtk_widget_get_gl_context(gtk_drawing_area));
+    #endif
+  }
+  #endif
+
+  #if defined(QT)
+  if (!strcmp(toolkit, "qt")) {
+    qt_win = new QtGLWidget;
+    qt_win->resize(win_width, win_height);
+    qt_win->show();
+  }
+  #endif
+
+  #if defined(SDL)
+  if (!strcmp(toolkit, "sdl")) {
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    sdl_win = SDL_CreateWindow(NULL, 0, 0, win_width, win_height, SDL_WINDOW_OPENGL);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, engine->version);
+    SDL_GL_CreateContext(sdl_win);
+    #else
+    sdl_win = SDL_SetVideoMode(win_width, win_height, 0, SDL_OPENGL);
+    #endif
+    sdl_idle_id = 1;
+  }
+  #endif
+
+  /* drawing (main event loop) */
+
+  engine->init(win_width, win_height);
+
+  if (getenv("NO_ANIM")) {
+    animate = 0;
+  }
+
+  #if defined(EFL)
+  if (!strcmp(toolkit, "efl")) {
+    elm_run();
+  }
+  #endif
+
+  #if defined(GLUT)
+  if (!strcmp(toolkit, "glut")) {
+    glutMainLoop();
+  }
+  #endif
+
+  #if defined(GTK)
+  if (!strcmp(toolkit, "gtk")) {
+    gtk_main();
+  }
+  #endif
+
+  #if defined(QT)
+  if (!strcmp(toolkit, "qt")) {
+    qt_app->exec();
+  }
+  #endif
+
+  #if defined(SDL)
+  if (!strcmp(toolkit, "sdl")) {
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    SDL_Display(sdl_win);
+    #else
     SDL_Display();
+    #endif
     while (1) {
       if (sdl_idle_id)
+        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        SDL_Idle(sdl_win);
+        #else
         SDL_Idle();
+        #endif
       SDL_Event event;
       memset(&event, 0, sizeof(SDL_Event));
       while (SDL_PollEvent(&event))
         if (event.type == SDL_KEYDOWN)
-          SDL_KeyDownEvent(&event);
+          #if SDL_VERSION_ATLEAST(2, 0, 0)
+          SDL_KeyDownEvent(sdl_win, &event, &sdl_idle_id);
+          #else
+          SDL_KeyDownEvent(&event, &sdl_idle_id);
+          #endif
       if (event.type == SDL_USEREVENT)
         break;
     }
@@ -740,6 +804,49 @@ int main(int argc, char *argv[])
     fps /= loop;
     printf("Gears demo: %.2f fps\n", fps);
   }
+
+  engine->term();
+
+  /* Toolkit term */
+
+  #if defined(EFL)
+  if (!strcmp(toolkit, "efl")) {
+    evas_object_del(elm_win);
+    elm_shutdown();
+  }
+  #endif
+
+  #if defined(GLUT)
+  if (!strcmp(toolkit, "glut")) {
+    glutDestroyWindow(glut_win);
+    glutExit();
+  }
+  #endif
+
+  #if defined(GTK)
+  if (!strcmp(toolkit, "gtk")) {
+    gtk_widget_destroy(gtk_win);
+    gdk_display_close(gdk_display_get_default());
+  }
+  #endif
+
+  #if defined(QT)
+  if (!strcmp(toolkit, "qt")) {
+    delete qt_win;
+    delete qt_app;
+  }
+  #endif
+
+  #if defined(SDL)
+  if (!strcmp(toolkit, "sdl")) {
+    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    SDL_DestroyWindow(sdl_win);
+    #else
+    SDL_FreeSurface(sdl_win);
+    #endif
+    SDL_Quit();
+  }
+  #endif
 
   return EXIT_SUCCESS;
 }

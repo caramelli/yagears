@@ -1,3 +1,9 @@
+0.5
+---
+Environment variable for width and height
+GTK+ with GtkGlArea support
+SDL2 support
+
 0.4
 ---
 EGL with Wayland display support

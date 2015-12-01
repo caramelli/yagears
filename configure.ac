@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.4)
+AC_INIT(yagears, 0.5)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -131,7 +131,7 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
       AC_DEFINE(EGL_FBDEV, 1, Support for EGL with Linux FBDev platform)
     fi
     if test x$enable_egl_wayland = xyes; then
-      PKG_CHECK_MODULES(WAYLAND, wayland-egl xkbcommon,
+      PKG_CHECK_MODULES(WAYLAND, wayland-client xkbcommon,
                         AC_DEFINE(EGL_WAYLAND, 1, Support for EGL with Wayland platform),
                         enable_egl_wayland=no)
     fi
