@@ -1,3 +1,15 @@
+commit 605fff3252885fbaa0a7670e68122073efd8ce55
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:22:48 2015 +0100
+
+    add environment variable for x and y position, add texture with C-Source image
+
+commit ccdc358a9cb4966a981d0976e56ac9ae1833f5ab
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:19:01 2015 +0100
+
+    update ChangeLog
+
 commit 72e1b50de33bacafbcccf7b643417969916b37cb
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Tue Dec 1 22:18:21 2015 +0100
