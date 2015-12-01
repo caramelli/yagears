@@ -1,3 +1,15 @@
+commit 72e1b50de33bacafbcccf7b643417969916b37cb
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:18:21 2015 +0100
+
+    add environment variable for width and height, add GTK+ with GtkGlArea and SDL2 support
+
+commit 660ea64313eb81935b442180188fbc509117659e
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:10:55 2015 +0100
+
+    update ChangeLog
+
 commit c8f10638487b893a9c4432441369a61ebcf99bc6
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Tue Dec 1 22:08:13 2015 +0100
