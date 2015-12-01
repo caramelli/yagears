@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.5)
+AC_INIT(yagears, 0.6)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -25,25 +25,23 @@ AC_ARG_ENABLE(glesv2,
               enable_glesv2=no, enable_glesv2=yes)
 
 if test x$enable_gl = xyes; then
-  PKG_CHECK_MODULES(GL, gl, AC_DEFINE(GL, 1, Support for OpenGL engine), enable_gl=no)
+  PKG_CHECK_MODULES(GL, gl, , enable_gl=no)
   if test x$enable_gl = xyes; then
     if test x$enable_glesv1_cm = xyes; then
-      AC_DEFINE(GLESV1_CM, 1, Support for OpenGL ES 1.1 CM engine)
-      CPPFLAGS="$CPPFLAGS -DGLESV1_CM_H=\<GL/gl.h\>"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\>"
     fi
     if test x$enable_glesv2 = xyes; then
-      AC_DEFINE(GLESV2, 1, Support for OpenGL ES 2.0 engine)
-      CPPFLAGS="$CPPFLAGS -DGLESV2_H=\<GL/gl.h\>"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\>"
     fi
   fi
 else
   if test x$enable_glesv1_cm = xyes; then
-    PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, AC_DEFINE(GLESV1_CM, 1, Support for OpenGL ES 1.1 CM engine), enable_glesv1_cm=no)
-    CPPFLAGS="$CPPFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
+    PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, , enable_glesv1_cm=no)
+    GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
   fi
   if test x$enable_glesv2 = xyes; then
-    PKG_CHECK_MODULES(GLESV2, glesv2, AC_DEFINE(GLESV2, 1, Support for OpenGL ES 2.0 engine), enable_glesv2=no)
-    CPPFLAGS="$CPPFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
+    PKG_CHECK_MODULES(GLESV2, glesv2, , enable_glesv2=no)
+    GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
   fi
 fi
 
@@ -79,9 +77,12 @@ AC_ARG_ENABLE(egl-wayland,
 
 if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
+    save_LIBS=$LIBS
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
     AC_CHECK_LIB(GL, glXCreateContext,
                  AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib),
                  enable_gl_x11=no)
+    LIBS=$save_LIBS
   fi
 
   if test x$enable_gl_directfb = xyes; then
@@ -99,9 +100,12 @@ if test x$enable_gl = xyes; then
   fi
 
   if test x$enable_gl_fbdev = xyes; then
+    save_LIBS=$LIBS
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
     AC_CHECK_LIB(GL, glFBDevCreateContext,
                  AC_DEFINE(GL_FBDEV, 1, Support for OpenGL Extension to Linux FBDev),
                  enable_gl_fbdev=no)
+    LIBS=$save_LIBS
   fi
 else
   enable_gl_x11=no

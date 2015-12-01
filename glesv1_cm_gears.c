@@ -27,9 +27,13 @@
 #include <stdlib.h>
 #include "engine.h"
 
+#include "tux_image.c"
+
+extern struct list engine_list;
+
 /******************************************************************************/
 
-typedef GLfloat Vertex[6];
+typedef GLfloat Vertex[8];
 
 typedef struct {
   GLint begin;
@@ -44,14 +48,18 @@ struct gear {
   GLuint vbo;
 };
 
-static struct gear *gear1 = NULL, *gear2 = NULL, *gear3 = NULL;
+struct gears {
+  struct gear *gear1;
+  struct gear *gear2;
+  struct gear *gear3;
+};
 
 static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
 {
   struct gear *gear;
   GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
   GLint i, j;
-  GLfloat n[3];
+  GLfloat n[3], t[2];
   GLint k = 0;
 
   gear = calloc(1, sizeof(struct gear));
@@ -64,14 +72,14 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   gear->vertices = calloc(34 * teeth, sizeof(Vertex));
   if (!gear->vertices) {
     printf("calloc vertices failed\n");
-    return NULL;
+    goto out;
   }
 
   gear->nstrips = 7 * teeth;
   gear->strips = calloc(gear->nstrips, sizeof(Strip));
   if (!gear->strips) {
     printf("calloc strips failed\n");
-    return NULL;
+    goto out;
   }
 
   r0 = inner;
@@ -85,6 +93,10 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     n[1] = ny; \
     n[2] = nz;
 
+  #define texcoord(tx, ty) \
+    t[0] = tx; \
+    t[1] = ty;
+
   #define vertex(x, y, z) \
     gear->vertices[gear->nvertices][0] = x; \
     gear->vertices[gear->nvertices][1] = y; \
@@ -92,6 +104,8 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     gear->vertices[gear->nvertices][3] = n[0]; \
     gear->vertices[gear->nvertices][4] = n[1]; \
     gear->vertices[gear->nvertices][5] = n[2]; \
+    gear->vertices[gear->nvertices][6] = t[0]; \
+    gear->vertices[gear->nvertices][7] = t[1]; \
     gear->nvertices++;
 
   for (i = 0; i < teeth; i++) {
@@ -105,13 +119,21 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     /* front face normal */
     normal(0, 0, 1);
     /* front face vertices */
+    texcoord(0.5 * r2 * s[1] / r1 + 0.5, 0.5 * r2 * c[1] / r1 + 0.5);
     vertex(r2 * c[1], r2 * s[1], width / 2);
+    texcoord(0.5 * r2 * s[2] / r1 + 0.5, 0.5 * r2 * c[2] / r1 + 0.5);
     vertex(r2 * c[2], r2 * s[2], width / 2);
+    texcoord(0.5 * r1 * s[0] / r1 + 0.5, 0.5 * r1 * c[0] / r1 + 0.5);
     vertex(r1 * c[0], r1 * s[0], width / 2);
+    texcoord(0.5 * r1 * s[3] / r1 + 0.5, 0.5 * r1 * c[3] / r1 + 0.5);
     vertex(r1 * c[3], r1 * s[3], width / 2);
+    texcoord(0.5 * r0 * s[0] / r1 + 0.5, 0.5 * r0 * c[0] / r1 + 0.5);
     vertex(r0 * c[0], r0 * s[0], width / 2);
+    texcoord(0.5 * r1 * s[4] / r1 + 0.5, 0.5 * r1 * c[4] / r1 + 0.5);
     vertex(r1 * c[4], r1 * s[4], width / 2);
+    texcoord(0.5 * r0 * s[4] / r1 + 0.5, 0.5 * r0 * c[4] / r1 + 0.5);
     vertex(r0 * c[4], r0 * s[4], width / 2);
+    texcoord(0, 0);
     /* front face end */
     gear->strips[k].count = 7;
     k++;
@@ -201,7 +223,7 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   glGenBuffers(1, &gear->vbo);
   if (!gear->vbo) {
     printf("glGenBuffers failed\n");
-    return NULL;
+    goto out;
   }
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
@@ -209,6 +231,19 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
 
   return gear;
+
+out:
+  if (gear->vbo) {
+    glDeleteBuffers(1, &gear->vbo);
+  }
+  if (gear->strips) {
+    free(gear->strips);
+  }
+  if (gear->vertices) {
+    free(gear->vertices);
+  }
+  free(gear);
+  return NULL;
 }
 
 static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
@@ -228,14 +263,17 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
 
   glVertexPointer(3, GL_FLOAT, sizeof(Vertex), NULL);
   glNormalPointer(GL_FLOAT, sizeof(Vertex), (const GLfloat *)NULL + 3);
+  glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (const GLfloat *)NULL + 6);
 
   glEnableClientState(GL_VERTEX_ARRAY);
   glEnableClientState(GL_NORMAL_ARRAY);
+  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
   for (k = 0; k < gear->nstrips; k++) {
     glDrawArrays(GL_TRIANGLE_STRIP, gear->strips[k].begin, gear->strips[k].count);
   }
 
+  glDisableClientState(GL_TEXTURE_COORD_ARRAY);
   glDisableClientState(GL_NORMAL_ARRAY);
   glDisableClientState(GL_VERTEX_ARRAY);
 
@@ -253,31 +291,46 @@ static void delete_gear(struct gear *gear)
 
 /******************************************************************************/
 
-static void glesv1_cm_gears_init(int win_width, int win_height)
+static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
 {
+  gears_t *gears = NULL;
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLfloat zNear = 5, zFar = 60;
+
+  gears = calloc(1, sizeof(gears_t));
+  if (!gears) {
+    printf("calloc gears failed\n");
+    return NULL;
+  }
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
+  glEnable(GL_TEXTURE_2D);
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
-  gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
-  if (!gear1) {
-    return;
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tux_image.width, tux_image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tux_image.pixel_data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+
+  gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
+  if (!gears->gear1) {
+    goto out;
   }
 
-  gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
-  if (!gear2) {
-    return;
+  gears->gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
+  if (!gears->gear2) {
+    goto out;
   }
 
-  gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
-  if (!gear3) {
-    return;
+  gears->gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
+  if (!gears->gear3) {
+    goto out;
   }
 
   glViewport(0, 0, (GLint)win_width, (GLint)win_height);
@@ -287,15 +340,30 @@ static void glesv1_cm_gears_init(int win_width, int win_height)
   glFrustumf(-1, 1, -(GLfloat)win_height/win_width, (GLfloat)win_height/win_width, zNear, zFar);
 
   glMatrixMode(GL_MODELVIEW);
+
+  return gears;
+
+out:
+  if (gears->gear3) {
+    delete_gear(gears->gear3);
+  }
+  if (gears->gear2) {
+    delete_gear(gears->gear2);
+  }
+  if (gears->gear1) {
+    delete_gear(gears->gear1);
+  }
+  free(gears);
+  return NULL;
 }
 
-static void glesv1_cm_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
+static void glesv1_cm_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, float model_rz)
 {
   const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
   const GLfloat blue[4] = { 0.2, 0.2, 1.0, 1.0 };
 
-  if (!gear1 || !gear2 || !gear3) {
+  if (!gears) {
     return;
   }
 
@@ -306,37 +374,37 @@ static void glesv1_cm_gears_draw(float view_tz, float view_rx, float view_ry, fl
   glRotatef((GLfloat)view_rx, 1, 0, 0);
   glRotatef((GLfloat)view_ry, 0, 1, 0);
 
-  draw_gear(gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
-  draw_gear(gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
-  draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
+  draw_gear(gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
+  draw_gear(gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
+  draw_gear(gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-static void glesv1_cm_gears_term()
+static void glesv1_cm_gears_term(gears_t *gears)
 {
-  if (gear1) {
-    delete_gear(gear1);
-    gear1 = NULL;
+  if (!gears) {
+    return;
   }
 
-  if (gear2) {
-    delete_gear(gear2);
-    gear2 = NULL;
-  }
+  delete_gear(gears->gear1);
+  delete_gear(gears->gear2);
+  delete_gear(gears->gear3);
 
-  if (gear3) {
-    delete_gear(gear3);
-    gear3 = NULL;
-  }
+  free(gears);
 
   printf("%s\n", glGetString(GL_VERSION));
 }
 
 /******************************************************************************/
 
-Engine GLESV1_CM_Engine = {
+static engine_t glesv1_cm_engine = {
   "glesv1_cm",
   1,
   glesv1_cm_gears_init,
   glesv1_cm_gears_draw,
   glesv1_cm_gears_term
 };
+
+static void __attribute__((constructor)) engine_ctor()
+{
+  list_add(&glesv1_cm_engine.entry, &engine_list);
+}

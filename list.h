@@ -21,15 +21,23 @@
   THE SOFTWARE.
 */
 
-#include "list.h"
+struct list {
+  struct list *next;
+  struct list *prev;
+};
 
-typedef struct gears gears_t;
+#define LIST_INIT(list) { &list, &list }
 
-typedef struct {
-  char *name;
-  int version;
-  gears_t *(*init)(int, int);
-  void (*draw)(gears_t *, float, float, float, float);
-  void (*term)(gears_t *);
-  struct list entry;
-} engine_t;
+static inline void list_add(struct list *entry, struct list *list)
+{
+  entry->next = list->next;
+  entry->prev = list;
+  list->next->prev = entry;
+  list->next = entry;
+}
+
+#define LIST_FOR_EACH(entry, list) \
+  for (entry = (list)->next; entry != list; entry = entry->next)
+
+#define LIST_ENTRY(entry, type, member) \
+  (type *)((char *)entry - (char *)&((type *)NULL)->member);

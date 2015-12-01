@@ -64,35 +64,16 @@
 
 #include "engine.h"
 
-#if defined(GL)
-extern Engine GL_Engine;
-#endif
-#if defined(GLESV1_CM)
-extern Engine GLESV1_CM_Engine;
-#endif
-#if defined(GLESV2)
-extern Engine GLESV2_Engine;
-#endif
-
-static Engine *engines[] = {
-  #if defined(GL)
-  &GL_Engine,
-  #endif
-  #if defined(GLESV1_CM)
-  &GLESV1_CM_Engine,
-  #endif
-  #if defined(GLESV2)
-  &GLESV2_Engine,
-  #endif
-};
+struct list engine_list = LIST_INIT(engine_list);
 
 /******************************************************************************/
 
 static char *backend = NULL;
-static Engine *engine = NULL;
+static engine_t *engine = NULL;
+static gears_t *gears = NULL;
 
-static int loop = 1, animate = 1, redisplay = 1, win_width = 0, win_height = 0;
-static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 0.0;
+static int loop = 1, animate = 1, redisplay = 1, win_width = 0, win_height = 0, win_posx = 0, win_posy = 0;
+static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 210.0;
 
 /******************************************************************************/
 
@@ -155,7 +136,7 @@ static void x11_keyboard_handle_key(XEvent *event)
 #endif
 
 #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
-static void dfb_keyboard_handle_key(DFBInputEvent *event)
+static void dfb_keyboard_handle_key(DFBWindowEvent *event)
 {
   switch (event->key_symbol) {
     case DIKS_ESCAPE:
@@ -420,6 +401,7 @@ int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_SUCCESS;
   char backends[64], *backend_arg = NULL, *engine_arg = NULL, *c;
+  struct list *engine_entry = NULL;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 
@@ -437,12 +419,15 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   IDirectFB *dfb_dpy = NULL;
-  IDirectFBScreen *dfb_screen = NULL;
+  IDirectFBDisplayLayer *dfb_layer = NULL;
+  DFBDisplayLayerConfig dfb_layer_config;
   DFBSurfaceCapabilities dfb_attr = DSCAPS_NONE;
-  DFBSurfaceDescription dfb_desc;
+  DFBWindowDescription dfb_desc;
+  IDirectFBWindow *dfb_window = NULL;
   IDirectFBSurface *dfb_win = NULL;
   IDirectFBEventBuffer *dfb_event_buffer = NULL;
-  DFBInputEvent dfb_event;
+  DFBWindowEventType dfb_event_mask = DWET_ALL;
+  DFBWindowEvent dfb_event;
   #endif
   #if defined(GL_DIRECTFB)
   IDirectFBGL *dfb_ctx = NULL;
@@ -526,8 +511,9 @@ int main(int argc, char *argv[])
     printf("\n\tUsage: %s -b backend -e engine\n\n", argv[0]);
     printf("\t\tbackends: %s\n\n", backends);
     printf("\t\tengines:  ");
-    for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
-      printf("%s ", engines[opt]->name);
+    LIST_FOR_EACH(engine_entry, &engine_list) {
+      engine = LIST_ENTRY(engine_entry, engine_t, entry);
+      printf("%s ", engine->name);
     }
     printf("\n\n");
     return EXIT_FAILURE;
@@ -547,13 +533,14 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  for (opt = 0; opt < sizeof(engines) / sizeof(Engine *); opt++) {
-    engine = engines[opt];
+  LIST_FOR_EACH(engine_entry, &engine_list) {
+    engine = LIST_ENTRY(engine_entry, engine_t, entry);
     if (!strcmp(engine->name, engine_arg))
       break;
+    engine = NULL;
   }
 
-  if (opt == sizeof(engines) / sizeof(Engine *)) {
+  if (!engine) {
     printf("%s: engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
@@ -592,19 +579,23 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    err = dfb_dpy->GetScreen(dfb_dpy, DSCID_PRIMARY, &dfb_screen);
+    err = dfb_dpy->GetDisplayLayer(dfb_dpy, DLID_PRIMARY, &dfb_layer);
     if (err) {
-      printf("GetScreen failed: %s\n", DirectFBErrorString(err));
+      printf("GetDisplayLayer failed: %s\n", DirectFBErrorString(err));
       ret = EXIT_FAILURE;
       goto out;
     }
 
-    err = dfb_screen->GetSize(dfb_screen, &win_width, &win_height);
+    memset(&dfb_layer_config, 0, sizeof(DFBDisplayLayerConfig));
+    err = dfb_layer->GetConfiguration(dfb_layer, &dfb_layer_config);
     if (err) {
-      printf("GetSize failed: %s\n", DirectFBErrorString(err));
+      printf("GetConfiguration failed: %s\n", DirectFBErrorString(err));
       ret = EXIT_FAILURE;
       goto out;
     }
+
+    win_width = dfb_layer_config.width;
+    win_height = dfb_layer_config.height;
   }
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
@@ -696,6 +687,14 @@ int main(int argc, char *argv[])
 
   if (getenv("HEIGHT")) {
     win_height = atoi(getenv("HEIGHT"));
+  }
+
+  if (getenv("POSX")) {
+    win_posx = atoi(getenv("POSX"));
+  }
+
+  if (getenv("POSY")) {
+    win_posy = atoi(getenv("POSY"));
   }
 
   #if defined(EGL_X11)
@@ -835,7 +834,7 @@ int main(int argc, char *argv[])
 
   #if defined(GL_X11) || defined(EGL_X11)
   if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
-    x11_win = XCreateSimpleWindow(x11_dpy, DefaultRootWindow(x11_dpy), 0, 0, win_width, win_height, 0, 0, 0);
+    x11_win = XCreateSimpleWindow(x11_dpy, DefaultRootWindow(x11_dpy), win_posx, win_posy, win_width, win_height, 0, 0, 0);
     if (!x11_win) {
       printf("XCreateSimpleWindow failed\n");
       ret = EXIT_FAILURE;
@@ -850,14 +849,23 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-    memset(&dfb_desc, 0, sizeof(DFBSurfaceDescription));
-    dfb_desc.flags = DSDESC_CAPS | DSDESC_WIDTH | DSDESC_HEIGHT;
-    dfb_desc.caps = DSCAPS_PRIMARY | dfb_attr;
+    memset(&dfb_desc, 0, sizeof(DFBWindowDescription));
+    dfb_desc.flags = DWDESC_SURFACE_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY;
+    dfb_desc.surface_caps = dfb_attr;
     dfb_desc.width = win_width;
     dfb_desc.height = win_height;
-    err = dfb_dpy->CreateSurface(dfb_dpy, &dfb_desc, &dfb_win);
+    dfb_desc.posx = win_posx;
+    dfb_desc.posy = win_posy;
+    err = dfb_layer->CreateWindow(dfb_layer, &dfb_desc, &dfb_window);
     if (err) {
-      printf("CreateSurface failed: %s\n", DirectFBErrorString(err));
+      printf("CreateWindow failed: %s\n", DirectFBErrorString(err));
+      ret = EXIT_FAILURE;
+      goto out;
+    }
+
+    err = dfb_window->GetSurface(dfb_window, &dfb_win);
+    if (err) {
+      printf("GetSurface failed: %s\n", DirectFBErrorString(err));
       ret = EXIT_FAILURE;
       goto out;
     }
@@ -874,6 +882,8 @@ int main(int argc, char *argv[])
     else {
       fb_win->width = win_width;
       fb_win->height = win_height;
+      fb_win->posx = win_posx;
+      fb_win->posy = win_posy;
     }
   }
   #endif
@@ -1037,9 +1047,31 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-    err = dfb_dpy->CreateInputEventBuffer(dfb_dpy, DICAPS_KEYS, DFB_FALSE, &dfb_event_buffer);
+    dfb_event_mask ^= DWET_KEYDOWN;
+    err = dfb_window->DisableEvents(dfb_window, dfb_event_mask);
     if (err) {
-      printf("CreateInputEventBuffer failed: %s\n", DirectFBErrorString(err));
+      printf("DisableEvents failed: %s\n", DirectFBErrorString(err));
+      ret = EXIT_FAILURE;
+      goto out;
+    }
+
+    err = dfb_window->CreateEventBuffer(dfb_window, &dfb_event_buffer);
+    if (err) {
+      printf("CreateEventBuffer failed: %s\n", DirectFBErrorString(err));
+      ret = EXIT_FAILURE;
+      goto out;
+    }
+
+    err = dfb_window->SetOpacity(dfb_window, 0xff);
+    if (err) {
+      printf("SetOpacity failed: %s\n", DirectFBErrorString(err));
+      ret = EXIT_FAILURE;
+      goto out;
+    }
+
+    err = dfb_window->RequestFocus(dfb_window);
+    if (err) {
+      printf("RequestFocus failed: %s\n", DirectFBErrorString(err));
       ret = EXIT_FAILURE;
       goto out;
     }
@@ -1078,7 +1110,11 @@ int main(int argc, char *argv[])
 
   /* drawing (main event loop) */
 
-  engine->init(win_width, win_height);
+  gears = engine->init(win_width, win_height);
+  if (!gears) {
+    ret = EXIT_FAILURE;
+    goto out;
+  }
 
   if (getenv("NO_ANIM")) {
     animate = 0;
@@ -1118,7 +1154,7 @@ int main(int argc, char *argv[])
     }
 
     if (redisplay) {
-      engine->draw(view_tz, view_rx, view_ry, model_rz);
+      engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
 
       if (animate) {
         frames++;
@@ -1167,7 +1203,7 @@ int main(int argc, char *argv[])
     #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
     if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
       if (!dfb_event_buffer->GetEvent(dfb_event_buffer, (DFBEvent *)&dfb_event)) {
-        if (dfb_event.type == DIET_KEYPRESS) {
+        if (dfb_event.type == DWET_KEYDOWN) {
           dfb_keyboard_handle_key(&dfb_event);
         }
       }
@@ -1190,7 +1226,7 @@ int main(int argc, char *argv[])
     #endif
   }
 
-  engine->term();
+  engine->term(gears);
 
   /* print info */
 
@@ -1354,8 +1390,12 @@ out:
       dfb_win->Release(dfb_win);
     }
 
-    if (dfb_screen) {
-      dfb_screen->Release(dfb_screen);
+    if (dfb_window) {
+      dfb_window->Release(dfb_window);
+    }
+
+    if (dfb_layer) {
+      dfb_layer->Release(dfb_layer);
     }
 
     if (dfb_dpy) {

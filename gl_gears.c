@@ -27,13 +27,21 @@
 #include <stdlib.h>
 #include "engine.h"
 
+#include "tux_image.c"
+
+extern struct list engine_list;
+
 /******************************************************************************/
 
 struct gear {
   GLuint list;
 };
 
-static struct gear *gear1 = NULL, *gear2 = NULL, *gear3 = NULL;
+struct gears {
+  struct gear *gear1;
+  struct gear *gear2;
+  struct gear *gear3;
+};
 
 static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
 {
@@ -51,14 +59,14 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   gear->list = glGenLists(1);
   if (!gear->list) {
     printf("glGenLists failed\n");
-    return NULL;
+    goto out;
   }
 
   glNewList(gear->list, GL_COMPILE);
   err = glGetError();
   if (err) {
     printf("glNewList failed: 0x%x\n", err);
-    return NULL;
+    goto out;
   }
 
   r0 = inner;
@@ -78,13 +86,21 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     /* front face normal */
     glNormal3f(0, 0, 1);
     /* front face vertices */
+    glTexCoord2f(0.5 * r2 * s[1] / r1 + 0.5, 0.5 * r2 * c[1] / r1 + 0.5);
     glVertex3f(r2 * c[1], r2 * s[1], width / 2);
+    glTexCoord2f(0.5 * r2 * s[2] / r1 + 0.5, 0.5 * r2 * c[2] / r1 + 0.5);
     glVertex3f(r2 * c[2], r2 * s[2], width / 2);
+    glTexCoord2f(0.5 * r1 * s[0] / r1 + 0.5, 0.5 * r1 * c[0] / r1 + 0.5);
     glVertex3f(r1 * c[0], r1 * s[0], width / 2);
+    glTexCoord2f(0.5 * r1 * s[3] / r1 + 0.5, 0.5 * r1 * c[3] / r1 + 0.5);
     glVertex3f(r1 * c[3], r1 * s[3], width / 2);
+    glTexCoord2f(0.5 * r0 * s[0] / r1 + 0.5, 0.5 * r0 * c[0] / r1 + 0.5);
     glVertex3f(r0 * c[0], r0 * s[0], width / 2);
+    glTexCoord2f(0.5 * r1 * s[4] / r1 + 0.5, 0.5 * r1 * c[4] / r1 + 0.5);
     glVertex3f(r1 * c[4], r1 * s[4], width / 2);
+    glTexCoord2f(0.5 * r0 * s[4] / r1 + 0.5, 0.5 * r0 * c[4] / r1 + 0.5);
     glVertex3f(r0 * c[4], r0 * s[4], width / 2);
+    glTexCoord2f(0, 0);
     /* front face end */
     glEnd();
 
@@ -167,6 +183,13 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   glEndList();
 
   return gear;
+
+out:
+  if (gear->list) {
+    glDeleteLists(gear->list, 1);
+  }
+  free(gear);
+  return NULL;
 }
 
 static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
@@ -195,31 +218,46 @@ static void delete_gear(struct gear *gear)
 
 /******************************************************************************/
 
-static void gl_gears_init(int win_width, int win_height)
+static gears_t *gl_gears_init(int win_width, int win_height)
 {
+  gears_t *gears = NULL;
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLdouble zNear = 5, zFar = 60;
+
+  gears = calloc(1, sizeof(gears_t));
+  if (!gears) {
+    printf("calloc gears failed\n");
+    return NULL;
+  }
 
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_NORMALIZE);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
+  glEnable(GL_TEXTURE_2D);
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
-  gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
-  if (!gear1) {
-    return;
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tux_image.width, tux_image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tux_image.pixel_data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+
+  gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
+  if (!gears->gear1) {
+    goto out;
   }
 
-  gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
-  if (!gear2) {
-    return;
+  gears->gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
+  if (!gears->gear2) {
+    goto out;
   }
 
-  gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
-  if (!gear3) {
-    return;
+  gears->gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
+  if (!gears->gear3) {
+    goto out;
   }
 
   glViewport(0, 0, (GLint)win_width, (GLint)win_height);
@@ -229,15 +267,30 @@ static void gl_gears_init(int win_width, int win_height)
   glFrustum(-1, 1, -(GLdouble)win_height/win_width, (GLdouble)win_height/win_width, zNear, zFar);
 
   glMatrixMode(GL_MODELVIEW);
+
+  return gears;
+
+out:
+  if (gears->gear3) {
+    delete_gear(gears->gear3);
+  }
+  if (gears->gear2) {
+    delete_gear(gears->gear2);
+  }
+  if (gears->gear1) {
+    delete_gear(gears->gear1);
+  }
+  free(gears);
+  return NULL;
 }
 
-static void gl_gears_draw(float view_tz, float view_rx, float view_ry, float model_rz)
+static void gl_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, float model_rz)
 {
   const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
   const GLfloat blue[4] = { 0.2, 0.2, 1.0, 1.0 };
 
-  if (!gear1 || !gear2 || !gear3) {
+  if (!gears) {
     return;
   }
 
@@ -248,37 +301,37 @@ static void gl_gears_draw(float view_tz, float view_rx, float view_ry, float mod
   glRotatef((GLfloat)view_rx, 1, 0, 0);
   glRotatef((GLfloat)view_ry, 0, 1, 0);
 
-  draw_gear(gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
-  draw_gear(gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
-  draw_gear(gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
+  draw_gear(gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
+  draw_gear(gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
+  draw_gear(gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
 }
 
-static void gl_gears_term()
+static void gl_gears_term(gears_t *gears)
 {
-  if (gear1) {
-    delete_gear(gear1);
-    gear1 = NULL;
+  if (!gears) {
+    return;
   }
 
-  if (gear2) {
-    delete_gear(gear2);
-    gear2 = NULL;
-  }
+  delete_gear(gears->gear1);
+  delete_gear(gears->gear2);
+  delete_gear(gears->gear3);
 
-  if (gear3) {
-    delete_gear(gear3);
-    gear3 = NULL;
-  }
+  free(gears);
 
   printf("%s\n", glGetString(GL_VERSION));
 }
 
 /******************************************************************************/
 
-Engine GL_Engine = {
+static engine_t gl_engine = {
   "gl",
   0,
   gl_gears_init,
   gl_gears_draw,
   gl_gears_term
 };
+
+void __attribute__((constructor)) engine_ctor()
+{
+  list_add(&gl_engine.entry, &engine_list);
+}
