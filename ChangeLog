@@ -1,3 +1,15 @@
+commit c8f10638487b893a9c4432441369a61ebcf99bc6
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:08:13 2015 +0100
+
+    add Wayland support, add GUI (EFL, GLUT, GTK+ with GtkGLExt, Qt, SDL support)
+
+commit c33703c9a223d7ec71ac28c82a474dc16feb8c73
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Mar 21 20:58:43 2015 +0100
+
+    update ChangeLog
+
 commit 6a0945cf74d7d0ba06c5ff278c460e5913ec86ea
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Mar 21 20:58:18 2015 +0100
