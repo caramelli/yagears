@@ -1,8 +1,10 @@
-AC_INIT(yagears, 0.6)
+AC_INIT(yagears, 0.7)
 
 AC_CONFIG_HEADERS(config.h)
 
 AM_INIT_AUTOMAKE
+
+LT_INIT
 
 AC_PROG_CC
 AC_PROG_CXX
@@ -28,10 +30,10 @@ if test x$enable_gl = xyes; then
   PKG_CHECK_MODULES(GL, gl, , enable_gl=no)
   if test x$enable_gl = xyes; then
     if test x$enable_glesv1_cm = xyes; then
-      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\>"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\> -DGL_GLEXT_PROTOTYPES"
     fi
     if test x$enable_glesv2 = xyes; then
-      GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\>"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGL_GLEXT_PROTOTYPES"
     fi
   fi
 else
@@ -74,20 +76,23 @@ AC_ARG_ENABLE(egl-fbdev,
 AC_ARG_ENABLE(egl-wayland,
               AS_HELP_STRING(--disable-egl-wayland, disable Wayland EGL rendering backend),
               enable_egl_wayland=no, enable_egl_wayland=yes)
+AC_ARG_ENABLE(egl-drm,
+              AS_HELP_STRING(--disable-egl-drm, disable DRM EGL rendering backend),
+              enable_egl_drm=no, enable_egl_drm=yes)
 
 if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
     save_LIBS=$LIBS
-    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl 2> /dev/null`"
     AC_CHECK_LIB(GL, glXCreateContext,
-                 AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib),
+                 AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib) X11_LIBS=-lX11,
                  enable_gl_x11=no)
     LIBS=$save_LIBS
   fi
 
   if test x$enable_gl_directfb = xyes; then
     AC_MSG_CHECKING(for DirectFBGL module)
-    MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal`
+    MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal 2> /dev/null`
     if test -d $MODULEDIR/interfaces/IDirectFBGL; then
       AC_MSG_RESULT(yes)
       PKG_CHECK_MODULES(DIRECTFB, directfb,
@@ -101,7 +106,7 @@ if test x$enable_gl = xyes; then
 
   if test x$enable_gl_fbdev = xyes; then
     save_LIBS=$LIBS
-    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl 2> /dev/null`"
     AC_CHECK_LIB(GL, glFBDevCreateContext,
                  AC_DEFINE(GL_FBDEV, 1, Support for OpenGL Extension to Linux FBDev),
                  enable_gl_fbdev=no)
@@ -114,7 +119,7 @@ else
 fi
 
 if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$enable_egl_fbdev = xyes ||
-   test x$enable_egl_wayland = xyes; then
+   test x$enable_egl_wayland = xyes || test x$enable_egl_drm; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
     if test x$enable_egl_x11 = xyes; then
@@ -139,17 +144,23 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
                         AC_DEFINE(EGL_WAYLAND, 1, Support for EGL with Wayland platform),
                         enable_egl_wayland=no)
     fi
+    if test x$enable_egl_drm = xyes; then
+      PKG_CHECK_MODULES(DRM, gbm libdrm libevdev,
+                        AC_DEFINE(EGL_DRM, 1, Support for EGL with DRM platform),
+                        enable_egl_drm=no)
+    fi
   else
     enable_egl_x11=no
     enable_egl_directfb=no
     enable_egl_fbdev=no
     enable_egl_wayland=no
+    enable_egl_drm=no
   fi
 fi
 
 if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a \
         x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a \
-        x$enable_egl_wayland = xno; then
+        x$enable_egl_wayland = xno -a x$enable_egl_drm = xno; then
   AC_MSG_ERROR(No rendering backends found)
 fi
 
@@ -193,11 +204,30 @@ if test x$enable_efl = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$ena
   AC_MSG_WARN(No graphical user interface toolkits found)
 fi
 
+AM_CONDITIONAL(HAVE_GLUT, test x$enable_glut = xyes)
 AM_CONDITIONAL(HAVE_GUI, test x$enable_efl = xyes ||
                          test x$enable_glut = xyes ||
                          test x$enable_gtk = xyes ||
                          test x$enable_qt = xyes ||
                          test x$enable_sdl = xyes)
+
+AC_ARG_ENABLE(png,
+              AS_HELP_STRING(--disable-png, disable PNG loader),
+              enable_png=no, enable_png=yes)
+AC_ARG_ENABLE(tiff,
+              AS_HELP_STRING(--disable-tiff, disable TIFF loader),
+              enable_tiff=no, enable_tiff=yes)
+
+if test x$enable_png = xyes; then
+  PKG_CHECK_MODULES(PNG, libpng, , enable_png=no)
+fi
+
+if test x$enable_tiff = xyes; then
+  PKG_CHECK_MODULES(TIFF, libtiff, , enable_tiff=no)
+fi
+
+AM_CONDITIONAL(PNG, test x$enable_png = xyes)
+AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
 
 AC_OUTPUT(Makefile)
 
@@ -211,6 +241,7 @@ echo "  EGL with Xlib platform           $enable_egl_x11"
 echo "  EGL with DirectFB platform       $enable_egl_directfb"
 echo "  EGL with Linux FBDev platform    $enable_egl_fbdev"
 echo "  EGL with Wayland platform        $enable_egl_wayland"
+echo "  EGL with DRM platform            $enable_egl_drm"
 echo
 
 echo

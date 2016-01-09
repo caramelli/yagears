@@ -1,3 +1,9 @@
+0.7
+---
+EGL with DRM display support
+Mosaic with GLUT support
+Texture with PNG and TIFF image
+
 0.6
 ---
 Environment variable for x and y position

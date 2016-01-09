@@ -11,6 +11,7 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
   - EGL interface with DirectFB display
   - EGL interface with Linux Framebuffer display
   - EGL interface with Wayland display
+  - EGL interface with DRM display
 
 and multiple graphical user interfaces:
 

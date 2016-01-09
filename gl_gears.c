@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include "engine.h"
 
-#include "tux_image.c"
+#include "image_loader.h"
 
 extern struct list engine_list;
 
@@ -38,6 +38,7 @@ struct gear {
 };
 
 struct gears {
+  image_t image;
   struct gear *gear1;
   struct gear *gear2;
   struct gear *gear3;
@@ -238,7 +239,8 @@ static gears_t *gl_gears_init(int win_width, int win_height)
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tux_image.width, tux_image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tux_image.pixel_data);
+  image_load(getenv("TEXTURE"), &gears->image);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gears->image.width, gears->image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gears->image.pixel_data);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -280,6 +282,9 @@ out:
   if (gears->gear1) {
     delete_gear(gears->gear1);
   }
+  if (gears->image.pixel_data) {
+    image_unload(&gears->image);
+  }
   free(gears);
   return NULL;
 }
@@ -315,6 +320,7 @@ static void gl_gears_term(gears_t *gears)
   delete_gear(gears->gear1);
   delete_gear(gears->gear2);
   delete_gear(gears->gear3);
+  image_unload(&gears->image);
 
   free(gears);
 

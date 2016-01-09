@@ -48,15 +48,12 @@
 #include <SDL.h>
 #endif
 
-#include "engine.h"
-
-struct list engine_list = LIST_INIT(engine_list);
+#include "gears_engine.h"
 
 /******************************************************************************/
 
 static char *toolkit = NULL;
-static engine_t *engine = NULL;
-static gears_t *gears = NULL;
+static gears_engine_t *gears_engine = NULL;
 
 static int loop = 0, animate = 1, t_rate = 0, t_rot = 0, frames = 0, win_width = 0, win_height = 0, win_posx = 0, win_posy = 0;
 static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 210.0;
@@ -99,7 +96,7 @@ static void rotate()
 static void elm_glview_render(Evas_Object *object)
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
-  engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
 }
 
@@ -164,7 +161,7 @@ static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
 static void glutDisplay()
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
-  engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
   glutSwapBuffers();
 }
@@ -233,7 +230,7 @@ static void glutSpecial(int key, int x, int y)
 static gboolean gtk_expose_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
-  engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
   #ifndef GTKGLEXT_CHECK_VERSION
   gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
@@ -312,7 +309,7 @@ void initializeGL()
 void paintGL()
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
-  engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
 }
 
@@ -377,7 +374,7 @@ static void SDL_Display()
 #endif
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
-  engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
   #if SDL_VERSION_ATLEAST(2, 0, 0)
   SDL_GL_SwapWindow(window);
@@ -464,9 +461,8 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
 
 int main(int argc, char *argv[])
 {
-  int ret = EXIT_SUCCESS;
+  int err = 0, ret = EXIT_FAILURE;
   char toolkits[64], *toolkit_arg = NULL, *engine_arg = NULL, *c;
-  struct list *engine_entry = NULL;
   int opt;
   #if defined(EFL)
   Evas_Object *elm_win;
@@ -529,9 +525,8 @@ int main(int argc, char *argv[])
     printf("\n\tUsage: %s -t toolkit -e engine\n\n", argv[0]);
     printf("\t\ttoolkits: %s\n\n", toolkits);
     printf("\t\tengines:  ");
-    LIST_FOR_EACH(engine_entry, &engine_list) {
-      engine = LIST_ENTRY(engine_entry, engine_t, entry);
-      printf("%s ", engine->name);
+    for (opt = 0; opt < gears_engine_nb(); opt++) {
+      printf("%s ", gears_engine_name(opt));
     }
     printf("\n\n");
     return EXIT_FAILURE;
@@ -551,15 +546,18 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  LIST_FOR_EACH(engine_entry, &engine_list) {
-    engine = LIST_ENTRY(engine_entry, engine_t, entry);
-    if (!strcmp(engine->name, engine_arg))
+  for (opt = 0; opt < gears_engine_nb(); opt++) {
+    if (!strcmp(gears_engine_name(opt), engine_arg))
       break;
-    engine = NULL;
   }
 
-  if (!engine) {
+  if (opt == gears_engine_nb()) {
     printf("%s: engine unknown\n", engine_arg);
+    return EXIT_FAILURE;
+  }
+
+  gears_engine = gears_engine_new(gears_engine_name(opt));
+  if (!gears_engine) {
     return EXIT_FAILURE;
   }
 
@@ -710,7 +708,7 @@ int main(int argc, char *argv[])
   if (!strcmp(toolkit, "sdl")) {
     #if SDL_VERSION_ATLEAST(2, 0, 0)
     sdl_win = SDL_CreateWindow(NULL, win_posx, win_posy, win_width, win_height, SDL_WINDOW_OPENGL);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, engine->version);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gears_engine_version(gears_engine));
     SDL_GL_CreateContext(sdl_win);
     #else
     char sdl_variable[64];
@@ -724,9 +722,8 @@ int main(int argc, char *argv[])
 
   /* drawing (main event loop) */
 
-  gears = engine->init(win_width, win_height);
-  if (!gears) {
-    ret = EXIT_FAILURE;
+  err = gears_engine_init(gears_engine, win_width, win_height);
+  if (err == -1) {
     goto out;
   }
 
@@ -794,7 +791,9 @@ int main(int argc, char *argv[])
     printf("Gears demo: %.2f fps\n", fps);
   }
 
-  engine->term(gears);
+  gears_engine_term(gears_engine);
+
+  ret = EXIT_SUCCESS;
 
 out:
 
@@ -838,6 +837,8 @@ out:
     SDL_Quit();
   }
   #endif
+
+  gears_engine_free(gears_engine);
 
   return ret;
 }

@@ -28,7 +28,7 @@
 #include <string.h>
 #include "engine.h"
 
-#include "tux_image.c"
+#include "image_loader.h"
 
 extern struct list engine_list;
 
@@ -136,6 +136,7 @@ struct gears {
   GLuint program;
   GLuint vertShader;
   GLuint fragShader;
+  image_t image;
   struct gear *gear1;
   struct gear *gear2;
   struct gear *gear3;
@@ -481,6 +482,10 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     goto out;
   }
 
+  if (strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.20") ||
+      strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.30")) {
+    fragShaderSource += strlen("precision mediump float;\n");
+  }
   glShaderSource(gears->fragShader, 1, &fragShaderSource, NULL);
 
   glCompileShader(gears->fragShader);
@@ -531,7 +536,8 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   Texture_loc = glGetUniformLocation(gears->program, "u_Texture");
   glUniform1i(Texture_loc, 0);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tux_image.width, tux_image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tux_image.pixel_data);
+  image_load(getenv("TEXTURE"), &gears->image);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gears->image.width, gears->image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gears->image.pixel_data);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -572,6 +578,9 @@ out:
   }
   if (gears->gear1) {
     delete_gear(gears->gear1);
+  }
+  if (gears->image.pixel_data) {
+    image_unload(&gears->image);
   }
   if (gears->fragShader) {
     glDeleteShader(gears->fragShader);
@@ -618,6 +627,7 @@ static void glesv2_gears_term(gears_t *gears)
   delete_gear(gears->gear1);
   delete_gear(gears->gear2);
   delete_gear(gears->gear3);
+  image_unload(&gears->image);
   glDeleteShader(gears->fragShader);
   glDeleteShader(gears->vertShader);
   glDeleteProgram(gears->program);

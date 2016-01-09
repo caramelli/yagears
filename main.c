@@ -58,19 +58,23 @@
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
-#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
+#if defined(EGL_DRM)
+#include <fcntl.h>
+#include <gbm.h>
+#include <xf86drm.h>
+#include <xf86drmMode.h>
+#include <libevdev/libevdev.h>
+#endif
+#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
 #include <EGL/egl.h>
 #endif
 
-#include "engine.h"
-
-struct list engine_list = LIST_INIT(engine_list);
+#include "gears_engine.h"
 
 /******************************************************************************/
 
 static char *backend = NULL;
-static engine_t *engine = NULL;
-static gears_t *gears = NULL;
+static gears_engine_t *gears_engine = NULL;
 
 static int loop = 1, animate = 1, redisplay = 1, win_width = 0, win_height = 0, win_posx = 0, win_posy = 0;
 static float fps = 0, view_tz = -40.0, view_rx = 20.0, view_ry = 30.0, model_rz = 210.0;
@@ -395,13 +399,61 @@ static void wl_registry_handle_global_remove(void *data, struct wl_registry *reg
 static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_global, wl_registry_handle_global_remove };
 #endif
 
+#if defined(EGL_DRM)
+static void drm_destroy_user_data(struct gbm_bo *bo, void *data)
+{
+  drmModeRmFB(gbm_device_get_fd(gbm_bo_get_device(bo)), (unsigned int)data);
+}
+
+static void drm_keyboard_handle_key(struct input_event *event)
+{
+  switch (event->code) {
+    case KEY_ESC:
+      sighandler(SIGTERM);
+      return;
+    case KEY_SPACE:
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case KEY_PAGEDOWN:
+      view_tz -= -5.0;
+      break;
+    case KEY_PAGEUP:
+      view_tz += -5.0;
+      break;
+    case KEY_DOWN:
+      view_rx -= 5.0;
+      break;
+    case KEY_UP:
+      view_rx += 5.0;
+      break;
+    case KEY_RIGHT:
+      view_ry -= 5.0;
+      break;
+    case KEY_LEFT:
+      view_ry += 5.0;
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+}
+#endif
+
 /******************************************************************************/
 
 int main(int argc, char *argv[])
 {
-  int err = 0, ret = EXIT_SUCCESS;
+  int err = 0, ret = EXIT_FAILURE;
   char backends[64], *backend_arg = NULL, *engine_arg = NULL, *c;
-  struct list *engine_entry = NULL;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 
@@ -456,8 +508,23 @@ int main(int argc, char *argv[])
   struct wl_shell_surface *wl_shell_surface = NULL;
   struct wl_window *wl_win = NULL;
   #endif
+  #if defined(EGL_DRM)
+  int drm_fd = -1;
+  struct gbm_device *drm_dpy = NULL;
+  drmModeResPtr drm_resources = NULL;
+  drmModeConnectorPtr drm_connector = NULL;
+  drmModeEncoderPtr drm_encoder = NULL;
+  drmModeCrtcPtr drm_crtc = NULL;
+  struct gbm_surface *drm_win = NULL;
+  struct gbm_bo *drm_bo = NULL;
+  unsigned int drm_fb_id = 0;
+  drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
+  int drm_keyboard = -1;
+  struct libevdev *drm_evdev = NULL;
+  struct input_event drm_event;
+  #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
   EGLint egl_config_attr[5];
@@ -492,6 +559,9 @@ int main(int argc, char *argv[])
   #if defined(EGL_WAYLAND)
   strcat(backends, "egl-wayland ");
   #endif
+  #if defined(EGL_DRM)
+  strcat(backends, "egl-drm ");
+  #endif
 
   while ((opt = getopt(argc, argv, "b:e:h")) != -1) {
     switch (opt) {
@@ -511,9 +581,8 @@ int main(int argc, char *argv[])
     printf("\n\tUsage: %s -b backend -e engine\n\n", argv[0]);
     printf("\t\tbackends: %s\n\n", backends);
     printf("\t\tengines:  ");
-    LIST_FOR_EACH(engine_entry, &engine_list) {
-      engine = LIST_ENTRY(engine_entry, engine_t, entry);
-      printf("%s ", engine->name);
+    for (opt = 0; opt < gears_engine_nb(); opt++) {
+      printf("%s ", gears_engine_name(opt));
     }
     printf("\n\n");
     return EXIT_FAILURE;
@@ -533,15 +602,18 @@ int main(int argc, char *argv[])
     return EXIT_FAILURE;
   }
 
-  LIST_FOR_EACH(engine_entry, &engine_list) {
-    engine = LIST_ENTRY(engine_entry, engine_t, entry);
-    if (!strcmp(engine->name, engine_arg))
+  for (opt = 0; opt < gears_engine_nb(); opt++) {
+    if (!strcmp(gears_engine_name(opt), engine_arg))
       break;
-    engine = NULL;
   }
 
-  if (!engine) {
+  if (opt == gears_engine_nb()) {
     printf("%s: engine unknown\n", engine_arg);
+    return EXIT_FAILURE;
+  }
+
+  gears_engine = gears_engine_new(gears_engine_name(opt));
+  if (!gears_engine) {
     return EXIT_FAILURE;
   }
 
@@ -552,7 +624,6 @@ int main(int argc, char *argv[])
     x11_dpy = XOpenDisplay(NULL);
     if (!x11_dpy) {
       printf("XOpenDisplay failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -568,21 +639,18 @@ int main(int argc, char *argv[])
     err = DirectFBInit(NULL, NULL);
     if (err) {
       printf("DirectFBInit failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = DirectFBCreate(&dfb_dpy);
     if (err) {
       printf("DirectFBCreate failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_dpy->GetDisplayLayer(dfb_dpy, DLID_PRIMARY, &dfb_layer);
     if (err) {
       printf("GetDisplayLayer failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -590,7 +658,6 @@ int main(int argc, char *argv[])
     err = dfb_layer->GetConfiguration(dfb_layer, &dfb_layer_config);
     if (err) {
       printf("GetConfiguration failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -604,15 +671,13 @@ int main(int argc, char *argv[])
       fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
       if (fb_dpy == -1) {
         printf("open %s failed: %s\n", getenv("FRAMEBUFFER"), strerror(errno));
-        ret = EXIT_FAILURE;
         goto out;
       }
     }
     else {
       fb_dpy = open("/dev/fb0", O_RDWR);
       if (fb_dpy == -1) {
-        printf("open %s failed: %s\n", "/dev/fb0", strerror(errno));
-        ret = EXIT_FAILURE;
+        printf("open /dev/fb0 failed: %s\n", strerror(errno));
         goto out;
       }
     }
@@ -621,7 +686,6 @@ int main(int argc, char *argv[])
     err = ioctl(fb_dpy, FBIOGET_FSCREENINFO, &fb_finfo);
     if (err == -1) {
       printf("ioctl FBIOGET_FSCREENINFO failed: %s\n", strerror(errno));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -629,7 +693,6 @@ int main(int argc, char *argv[])
     err = ioctl(fb_dpy, FBIOGET_VSCREENINFO, &fb_vinfo);
     if (err == -1) {
       printf("ioctl FBIOGET_VSCREENINFO failed: %s\n", strerror(errno));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -642,7 +705,6 @@ int main(int argc, char *argv[])
     wl_dpy = wl_display_connect(NULL);
     if (!wl_dpy) {
       printf("wl_display_connect failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -651,33 +713,80 @@ int main(int argc, char *argv[])
     wl_data.wl_registry = wl_display_get_registry(wl_dpy);
     if (!wl_data.wl_registry) {
       printf("wl_display_get_registry failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = wl_registry_add_listener(wl_data.wl_registry, &wl_registry_listener, &wl_data);
     if (err == -1) {
       printf("wl_registry_add_listener failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = wl_display_dispatch(wl_dpy);
     if (err == -1) {
       printf("wl_display_dispatch failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = wl_display_roundtrip(wl_dpy);
     if (err == -1) {
       printf("wl_display_roundtrip failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     win_width = wl_data.width;
     win_height = wl_data.height;
+  }
+  #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    if (getenv("DRICARD")) {
+      drm_fd = open(getenv("DRICARD"), O_RDWR);
+      if (drm_fd == -1) {
+        printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
+        goto out;
+      }
+    }
+    else {
+      drm_fd = open("/dev/dri/card0", O_RDWR);
+      if (drm_fd == -1) {
+        printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
+        goto out;
+      }
+    }
+
+    drm_dpy = gbm_create_device(drm_fd);
+    if (!drm_dpy) {
+      printf("gbm_create_device failed\n");
+      goto out;
+    }
+
+    drm_resources = drmModeGetResources(drm_fd);
+    if (!drm_resources) {
+      printf("drmModeGetResources failed\n");
+      goto out;
+    }
+
+    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[0]);
+    if (!drm_connector) {
+      printf("drmModeGetConnector failed\n");
+      goto out;
+    }
+
+    drm_encoder = drmModeGetEncoder(drm_fd, drm_resources->encoders[0]);
+    if (!drm_encoder) {
+      printf("drmModeGetEncoder failed\n");
+      goto out;
+    }
+
+    drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
+    if (!drm_crtc) {
+      printf("drmModeGetCrtc failed\n");
+      goto out;
+    }
+
+    win_width = drm_connector->modes[0].hdisplay;
+    win_height = drm_connector->modes[0].vdisplay;
   }
   #endif
 
@@ -721,11 +830,16 @@ int main(int argc, char *argv[])
     egl_dpy = eglGetDisplay((EGLNativeDisplayType)wl_dpy);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    setenv("EGL_PLATFORM", "drm", 1);
+    egl_dpy = eglGetDisplay((EGLNativeDisplayType)drm_dpy);
+  }
+  #endif
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     if (!egl_dpy) {
       printf("eglGetDisplay failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -743,7 +857,6 @@ int main(int argc, char *argv[])
     x11_visual = glXChooseVisual(x11_dpy, 0, x11_attr);
     if (!x11_visual) {
       printf("glXChooseVisual failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -762,40 +875,35 @@ int main(int argc, char *argv[])
     fb_visual = glFBDevCreateVisual(&fb_finfo, &fb_vinfo, fb_attr);
     if (!fb_visual) {
       printf("glFBDevCreateVisual failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     fb_addr = mmap(NULL, fb_finfo.smem_len, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
     if (fb_addr == MAP_FAILED) {
       printf("mmap failed: %s\n", strerror(errno));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     fb_buffer = glFBDevCreateBuffer(&fb_finfo, &fb_vinfo, fb_visual, fb_addr, NULL, fb_finfo.smem_len);
     if (!fb_buffer) {
       printf("glFBDevCreateBuffer failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     err = eglInitialize(egl_dpy, &egl_major_version, &egl_minor_version);
     if (!err) {
       printf("eglInitialize failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
 
-    if (!engine->version) {
+    if (!gears_engine_version(gears_engine)) {
       err = eglBindAPI(EGL_OPENGL_API);
       if (!err) {
         printf("eglBindAPI failed: 0x%x\n", eglGetError());
-        ret = EXIT_FAILURE;
         goto out;
       }
     }
@@ -808,21 +916,18 @@ int main(int argc, char *argv[])
     err = eglChooseConfig(egl_dpy, egl_config_attr, NULL, 0, &egl_nconfigs);
     if (!err || !egl_nconfigs) {
       printf("eglChooseConfig failed: 0x%x, %d\n", eglGetError(), egl_nconfigs);
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     egl_configs = malloc(egl_nconfigs * sizeof(EGLConfig));
     if (!egl_configs) {
       printf("malloc failed: %s\n", strerror(errno));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = eglChooseConfig(egl_dpy, egl_config_attr, egl_configs, egl_nconfigs, &egl_nconfigs);
     if (!err) {
       printf("eglChooseConfig failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -837,7 +942,6 @@ int main(int argc, char *argv[])
     x11_win = XCreateSimpleWindow(x11_dpy, DefaultRootWindow(x11_dpy), win_posx, win_posy, win_width, win_height, 0, 0, 0);
     if (!x11_win) {
       printf("XCreateSimpleWindow failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
@@ -859,14 +963,12 @@ int main(int argc, char *argv[])
     err = dfb_layer->CreateWindow(dfb_layer, &dfb_desc, &dfb_window);
     if (err) {
       printf("CreateWindow failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_window->GetSurface(dfb_window, &dfb_win);
     if (err) {
       printf("GetSurface failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -876,7 +978,6 @@ int main(int argc, char *argv[])
     fb_win = calloc(1, sizeof(struct fb_window));
     if (!fb_win) {
       printf("fb_window calloc failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
     else {
@@ -892,14 +993,12 @@ int main(int argc, char *argv[])
     wl_surface = wl_compositor_create_surface(wl_data.wl_compositor);
     if (!wl_surface) {
       printf("wl_compositor_create_surface failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     wl_win = calloc(1, sizeof(struct wl_window));
     if (!wl_win) {
       printf("wl_window calloc failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
     else {
@@ -911,11 +1010,21 @@ int main(int argc, char *argv[])
     wl_shell_surface = wl_shell_get_shell_surface(wl_data.wl_shell, wl_surface);
     if (!wl_shell_surface) {
       printf("wl_shell_get_shell_surface failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
+    wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
+
     wl_shell_surface_set_toplevel(wl_shell_surface);
+  }
+  #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    drm_win = gbm_surface_create(drm_dpy, win_width, win_height, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+    if (!drm_win) {
+      printf("gbm_surface_create failed\n");
+      goto out;
+    }
   }
   #endif
 
@@ -939,11 +1048,15 @@ int main(int argc, char *argv[])
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)wl_win, NULL);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
+  }
+  #endif
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     if (!egl_win) {
       printf("eglCreateWindowSurface failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -956,14 +1069,12 @@ int main(int argc, char *argv[])
     x11_ctx = glXCreateContext(x11_dpy, x11_visual, NULL, True);
     if (!x11_ctx) {
       printf("glXCreateContext failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = glXMakeCurrent(x11_dpy, x11_win, x11_ctx);
     if (!err) {
       printf("glXMakeCurrent failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -973,14 +1084,12 @@ int main(int argc, char *argv[])
     err = dfb_win->GetGL(dfb_win, &dfb_ctx);
     if (err) {
       printf("GetGL failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_ctx->Lock(dfb_ctx);
     if (err) {
       printf("Lock failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -992,48 +1101,39 @@ int main(int argc, char *argv[])
     fb_ctx = glFBDevCreateContext(fb_visual, NULL);
     if (!fb_ctx) {
       printf("glFBDevCreateContext failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = glFBDevMakeCurrent(fb_ctx, fb_buffer, fb_buffer);
     if (!err) {
       printf("glFBDevMakeCurrent failed\n");
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     opt = 0;
     memset(egl_ctx_attr, 0, sizeof(egl_ctx_attr));
-    if (engine->version == 2) {
+    if (gears_engine_version(gears_engine) == 2) {
       egl_ctx_attr[opt++] = EGL_CONTEXT_CLIENT_VERSION;
-      egl_ctx_attr[opt++] = engine->version;
+      egl_ctx_attr[opt++] = gears_engine_version(gears_engine);
     }
     egl_ctx_attr[opt] = EGL_NONE;
     egl_ctx = eglCreateContext(egl_dpy, egl_config, EGL_NO_CONTEXT, egl_ctx_attr);
     if (!egl_ctx) {
       printf("eglCreateContext failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = eglMakeCurrent(egl_dpy, egl_win, egl_win, egl_ctx);
     if (!err) {
       printf("eglMakeCurrent failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
       goto out;
     }
 
-    err = eglSwapInterval(egl_dpy, 0);
-    if (!err) {
-      printf("eglSwapInterval failed: 0x%x\n", eglGetError());
-      ret = EXIT_FAILURE;
-      goto out;
-    }
+    eglSwapInterval(egl_dpy, 0);
   }
   #endif
 
@@ -1051,28 +1151,24 @@ int main(int argc, char *argv[])
     err = dfb_window->DisableEvents(dfb_window, dfb_event_mask);
     if (err) {
       printf("DisableEvents failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_window->CreateEventBuffer(dfb_window, &dfb_event_buffer);
     if (err) {
       printf("CreateEventBuffer failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_window->SetOpacity(dfb_window, 0xff);
     if (err) {
       printf("SetOpacity failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
 
     err = dfb_window->RequestFocus(dfb_window);
     if (err) {
       printf("RequestFocus failed: %s\n", DirectFBErrorString(err));
-      ret = EXIT_FAILURE;
       goto out;
     }
   }
@@ -1083,15 +1179,13 @@ int main(int argc, char *argv[])
       fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
         printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
-        ret = EXIT_FAILURE;
         goto out;
       }
     }
     else {
       fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
-        printf("open %s failed: %s\n", "/dev/input/event0", strerror(errno));
-        ret = EXIT_FAILURE;
+        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
         goto out;
       }
     }
@@ -1102,7 +1196,30 @@ int main(int argc, char *argv[])
     wl_data.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (!wl_data.xkb_context) {
       printf("xkb_context_new failed\n");
-      ret = EXIT_FAILURE;
+      goto out;
+    }
+  }
+  #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    if (getenv("KEYBOARD")) {
+      drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+      if (drm_keyboard == -1) {
+        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        goto out;
+      }
+    }
+    else {
+      drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+      if (drm_keyboard == -1) {
+        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        goto out;
+      }
+    }
+
+    err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
+    if (err < 0) {
+      printf("libevdev_new_from_fd failed: %s\n", strerror(-err));
       goto out;
     }
   }
@@ -1110,9 +1227,8 @@ int main(int argc, char *argv[])
 
   /* drawing (main event loop) */
 
-  gears = engine->init(win_width, win_height);
-  if (!gears) {
-    ret = EXIT_FAILURE;
+  err = gears_engine_init(gears_engine, win_width, win_height);
+  if (err == -1) {
     goto out;
   }
 
@@ -1154,7 +1270,7 @@ int main(int argc, char *argv[])
     }
 
     if (redisplay) {
-      engine->draw(gears, view_tz, view_rx, view_ry, model_rz);
+      gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
 
       if (animate) {
         frames++;
@@ -1176,19 +1292,19 @@ int main(int argc, char *argv[])
       }
       #endif
 
-      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
         eglSwapBuffers(egl_dpy, egl_win);
       }
       #endif
     }
 
-    if (!animate && redisplay) {
-      redisplay = 0;
-    }
-
     #if defined(GL_X11) || defined(EGL_X11)
     if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
       if (XPending(x11_dpy)) {
         XNextEvent(x11_dpy, &x11_event);
         if (x11_event.type == Expose && !redisplay) {
@@ -1202,6 +1318,10 @@ int main(int argc, char *argv[])
     #endif
     #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
     if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
       if (!dfb_event_buffer->GetEvent(dfb_event_buffer, (DFBEvent *)&dfb_event)) {
         if (dfb_event.type == DWET_KEYDOWN) {
           dfb_keyboard_handle_key(&dfb_event);
@@ -1211,6 +1331,10 @@ int main(int argc, char *argv[])
     #endif
     #if defined(GL_FBDEV) || defined(EGL_FBDEV)
     if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
       read(fb_keyboard, &fb_event, sizeof(struct input_event));
       if (fb_event.type == EV_KEY) {
         if (fb_event.value) {
@@ -1221,12 +1345,45 @@ int main(int argc, char *argv[])
     #endif
     #if defined(EGL_WAYLAND)
     if (!strcmp(backend, "egl-wayland")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
       wl_display_dispatch(wl_dpy);
+    }
+    #endif
+    #if defined(EGL_DRM)
+    if (!strcmp(backend, "egl-drm")) {
+      if (redisplay) {
+        if (drm_bo) {
+          gbm_surface_release_buffer(drm_win, drm_bo);
+        }
+        drm_bo = gbm_surface_lock_front_buffer(drm_win);
+        if (drm_bo) {
+          drm_fb_id = (unsigned int)gbm_bo_get_user_data(drm_bo);
+          if(!drm_fb_id) {
+            drmModeAddFB(drm_fd, win_width, win_height, 24, 32, win_width * 4, gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
+            gbm_bo_set_user_data(drm_bo, (void *)drm_fb_id, drm_destroy_user_data);
+          }
+          drmModePageFlip(drm_fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+          drmHandleEvent(drm_fd, &drm_context);
+        }
+        if (!animate) {
+          redisplay = 0;
+        }
+      }
+
+      libevdev_next_event(drm_evdev, LIBEVDEV_READ_FLAG_NORMAL, &drm_event);
+      if (drm_event.type == EV_KEY) {
+        if (drm_event.value) {
+          drm_keyboard_handle_key(&drm_event);
+        }
+      }
     }
     #endif
   }
 
-  engine->term(gears);
+  gears_engine_term(gears_engine);
 
   /* print info */
 
@@ -1255,8 +1412,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_DEPTH_SIZE, &egl_depth_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_RED_SIZE, &egl_red_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_GREEN_SIZE, &egl_green_size);
@@ -1265,6 +1422,8 @@ int main(int argc, char *argv[])
     printf("EGL %d.%d (depth %d, red %d, green %d, blue %d, alpha %d)\n", egl_major_version, egl_minor_version, egl_depth_size, egl_red_size, egl_green_size, egl_blue_size, egl_alpha_size);
   }
   #endif
+
+  ret = EXIT_SUCCESS;
 
 out:
 
@@ -1306,11 +1465,22 @@ out:
     }
   }
   #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    if (drm_evdev) {
+      libevdev_free(drm_evdev);
+    }
+
+    if (drm_keyboard != -1) {
+      close(drm_keyboard);
+    }
+  }
+  #endif
 
   /* destroy context */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     if (egl_ctx) {
       eglMakeCurrent(egl_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       eglDestroyContext(egl_dpy, egl_ctx);
@@ -1345,8 +1515,8 @@ out:
 
   /* destroy window and close display */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
     if (egl_win) {
       eglDestroySurface(egl_dpy, egl_win);
     }
@@ -1472,6 +1642,40 @@ out:
     }
   }
   #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    if (drm_win) {
+      gbm_surface_destroy(drm_win);
+    }
+
+    if (drm_crtc) {
+      drmModeSetCrtc(drm_fd, drm_crtc->crtc_id, drm_crtc->buffer_id, drm_crtc->x, drm_crtc->y, &drm_connector->connector_id, 1, &drm_crtc->mode);
+      drmModeFreeCrtc(drm_crtc);
+    }
+
+    if (drm_encoder) {
+      drmModeFreeEncoder(drm_encoder);
+    }
+
+    if (drm_connector) {
+      drmModeFreeConnector(drm_connector);
+    }
+
+    if (drm_resources) {
+      drmModeFreeResources(drm_resources);
+    }
+
+    if (drm_dpy) {
+      gbm_device_destroy(drm_dpy);
+    }
+
+    if (drm_fd != -1) {
+      close(drm_fd);
+    }
+  }
+  #endif
+
+  gears_engine_free(gears_engine);
 
   return ret;
 }
