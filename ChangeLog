@@ -1,3 +1,15 @@
+commit 7a596fc3b307a737ab0ee42a6dfe2b75644c24a9
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jan 9 15:45:16 2016 -0500
+
+    add DRM support, add Mosaic with GLUT support, add texture with PNG and TIFF image
+
+commit 4cdf7f2eab38411969a713a13b7ced0d9c947875
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 1 22:23:16 2015 +0100
+
+    update ChangeLog
+
 commit 605fff3252885fbaa0a7670e68122073efd8ce55
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Tue Dec 1 22:22:48 2015 +0100
