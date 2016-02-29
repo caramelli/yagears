@@ -410,7 +410,7 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     "void main(void)\n"
     "{\n"
     "  gl_Position = u_ModelViewProjectionMatrix * vec4(a_Vertex, 1);\n"
-    "  v_Color = u_Color * dot(normalize(u_LightPos.xyz), normalize(vec3(u_NormalMatrix * vec4(a_Normal, 1))));\n"
+    "  v_Color = u_Color * vec4(0.2, 0.2, 0.2, 1) + u_Color * dot(normalize(u_LightPos.xyz), normalize(vec3(u_NormalMatrix * vec4(a_Normal, 1))));\n"
     "  v_TexCoord = a_TexCoord;\n"
     "}";
   const char *fragShaderSource =
@@ -431,7 +431,7 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   GLint LightPos_loc;
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLint Texture_loc;
-  GLfloat zNear = 5, zFar = 60;
+  const GLfloat zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {

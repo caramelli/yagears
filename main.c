@@ -59,11 +59,58 @@
 #include <xkbcommon/xkbcommon.h>
 #endif
 #if defined(EGL_DRM)
+#include <dlfcn.h>
 #include <fcntl.h>
-#include <gbm.h>
+#include <limits.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <libevdev/libevdev.h>
+
+struct __DRIextensionRec {
+  char *name;
+  int version;
+};
+
+struct __DRIdrawableRec;
+struct __DRIimageList;
+struct __DRIimageLoaderExtensionRec {
+  struct __DRIextensionRec base;
+  int (*getBuffers)(struct __DRIdrawableRec *drawable, unsigned int format, unsigned int *stamp, void *loaderPrivate, unsigned int buffer_mask, struct __DRIimageList *buffers);
+};
+
+struct __DRIscreenRec;
+struct __DRIconfigRec;
+struct __DRIcoreExtensionRec {
+  struct __DRIextensionRec base;
+  struct __DRIscreenRec *(*createNewScreen)(int screen, int fd, unsigned int sarea_handle, const struct __DRIextensionRec **extensions, struct __DRIconfigRec ***driverConfigs, void *loaderPrivate);
+  void (*destroyScreen)(struct __DRIscreenRec *screen);
+  const struct __DRIextensionRec **(*getExtensions)(struct __DRIscreenRec *screen);
+};
+
+struct __DRIcontextRec;
+struct __DRIbufferRec;
+struct __DRIdri2ExtensionRec {
+  struct __DRIextensionRec base;
+  struct __DRIscreenRec *(*createNewScreen)(int screen, int fd, const struct __DRIextensionRec **extensions, struct __DRIconfigRec ***driver_configs, void *loaderPrivate);
+  struct __DRIdrawableRec *(*createNewDrawable)(struct __DRIscreenRec *screen, const struct __DRIconfigRec *config, void *loaderPrivate);
+  struct __DRIcontextRec *(*createNewContext)(struct __DRIscreenRec *screen, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, void *loaderPrivate);
+  unsigned int (*getAPIMask)(struct __DRIscreenRec *screen);
+  struct __DRIcontextRec *(*createNewContextForAPI)(struct __DRIscreenRec *screen, int api, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, void *data);
+  struct __DRIbufferRec *(*allocateBuffer)(struct __DRIscreenRec *screen, unsigned int attachment, unsigned int format, int width, int height);
+  void (*releaseBuffer)(struct __DRIscreenRec *screen, struct __DRIbufferRec *buffer);
+  struct __DRIcontextRec *(*createContextAttribs)(struct __DRIscreenRec *screen, int api, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, unsigned int num_attribs, const unsigned int *attribs, unsigned int *error, void *loaderPrivate);
+  struct __DRIscreenRec *(*createNewScreen2)(int screen, int fd, const struct __DRIextensionRec **extensions, const struct __DRIextensionRec **driver_extensions, const struct __DRIconfigRec ***driver_configs, void *loaderPrivate);
+};
+
+struct __DRIimageRec;
+struct __DRIimageExtensionRec {
+  struct __DRIextensionRec base;
+  struct __DRIimageRec *(*createImageFromName)(struct __DRIscreenRec *screen, int width, int height, int format, int name, int pitch, void *loaderPrivate);
+  struct __DRIimageRec *(*createImageFromRenderbuffer)(struct __DRIcontextRec *context, int renderbuffer, void *loaderPrivate);
+  void (*destroyImage)(struct __DRIimageRec *image);
+  struct __DRIimageRec *(*createImage)(struct __DRIscreenRec *screen, int width, int height, int format, unsigned int use, void *loaderPrivate);
+  int (*queryImage)(struct __DRIimageRec *image, int attrib, int *value);
+};
 #endif
 #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
 #include <EGL/egl.h>
@@ -400,9 +447,106 @@ static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_g
 #endif
 
 #if defined(EGL_DRM)
-static void drm_destroy_user_data(struct gbm_bo *bo, void *data)
+struct drm_display {
+  struct drm_display *(*dummy)(int fd);
+  int fd;
+  char *name;
+  unsigned int refcount;
+  struct stat stat;
+  void (*destroy)(struct drm_display *display);
+  int (*is_format_supported)(struct drm_display *display, unsigned int format, unsigned int usage);
+  struct drm_bo *(*bo_create)(struct drm_display *display, unsigned int width, unsigned int height, unsigned int format, unsigned int usage);
+  struct drm_bo *(*bo_import)(struct drm_display *display, unsigned int type, void *buffer, unsigned int usage);
+  int (*bo_write)(struct drm_bo *bo, void *buf, size_t data);
+  int (*bo_get_fd)(struct drm_bo *bo);
+  void (*bo_destroy)(struct drm_bo *bo);
+  struct drm_surface *(*surface_create)(struct drm_display *display, unsigned int width, unsigned int height, unsigned int format, unsigned int flags);
+  struct drm_bo *(*surface_lock_front_buffer)(struct drm_surface *surface);
+  void (*surface_release_buffer)(struct drm_surface *surface, struct drm_bo *bo);
+  int (*surface_has_free_buffers)(struct drm_surface *surface);
+  void (*surface_destroy)(struct drm_surface *surface);
+  int type;
+  char *driver_name;
+  void *driver;
+  struct __DRIscreenRec *screen;
+  struct __DRIcoreExtensionRec *core;
+  struct __DRIdri2ExtensionRec *dri2;
+  struct __DRIimageExtensionRec *image;
+  struct __DRIswrastExtensionRec *swrast;
+  struct __DRI2flushExtensionRec *flush;
+  struct __DRIdri2LoaderExtensionRec *loader;
+  struct __DRIconfigRec **driver_configs;
+  struct __DRIextensionRec **extensions;
+  struct __DRIextensionRec **driver_extensions;
+  struct __DRIimageRec *(*lookup_image)(struct __DRIscreenRec *screen, void *image, void *data);
+  void *lookup_user_data;
+  struct __DRIbufferRec *(*get_buffers)(struct __DRIdrawableRec *drawable, int *width, int *height, unsigned int *attachments, int count, int *out_count, void *data);
+  void (*flush_front_buffer)(struct __DRIdrawableRec *drawable, void *data);
+  struct __DRIbufferRec *(*get_buffers_with_format)(struct __DRIdrawableRec *drawable, int *width, int *height, unsigned int *attachments, int count, int *out_count, void *data);
+  int (*image_get_buffers)(struct __DRIdrawableRec *drawable, unsigned int format, unsigned int *stamp, void *loaderPrivate, unsigned int buffer_mask, struct __DRIimageList *buffers);
+  void (*swrast_put_image2)(struct __DRIdrawableRec *drawable, int op, int x, int y, int width, int height, int stride, char *data, void *loaderPrivate);
+  void (*swrast_get_image)(struct __DRIdrawableRec *drawable, int x, int y, int width, int height, char *data, void *loaderPrivate);
+};
+
+struct drm_surface {
+  struct drm_display *display;
+  unsigned int width;
+  unsigned int height;
+  unsigned int format;
+  unsigned int flags;
+  void *private;
+};
+
+struct drm_bo {
+  struct drm_display *display;
+  unsigned int width;
+  unsigned int height;
+  unsigned int stride;
+  unsigned int format;
+  unsigned long long handle;
+  void *user_data;
+  void (*destroy_user_data)(struct drm_bo *bo, void *data);
+  struct __DRIimageRec *image;
+};
+
+static int image_get_buffers(struct __DRIdrawableRec *drawable, unsigned int format, unsigned int *stamp, void *loaderPrivate, unsigned int buffer_mask, struct __DRIimageList *buffers)
 {
-  drmModeRmFB(gbm_device_get_fd(gbm_bo_get_device(bo)), (unsigned int)data);
+  struct drm_surface *surface = loaderPrivate;
+  struct drm_display *display = surface->display;
+
+  return display->image_get_buffers(drawable, format, stamp, surface->private, buffer_mask, buffers);
+}
+
+static struct __DRIimageLoaderExtensionRec image_loader_extension = {
+  .base = { "DRI_IMAGE_LOADER", 1 },
+  .getBuffers = image_get_buffers,
+};
+
+static struct drm_bo *drm_bo_create(struct drm_display *display, unsigned int width, unsigned int height, unsigned int format, unsigned int usage)
+{
+  struct drm_bo *bo;
+
+  bo = calloc(1, sizeof(struct drm_bo));
+  bo->display = display;
+  bo->width = width;
+  bo->height = height;
+  bo->format = format;
+  bo->image = display->image->createImage(display->screen, width, height, 0x1002, 2, bo);
+  display->image->queryImage(bo->image, 0x2001, (int *)&bo->handle);
+
+  return bo;
+}
+
+static void drm_bo_destroy(struct drm_bo *bo)
+{
+  bo->display->image->destroyImage(bo->image);
+
+  free(bo);
+}
+
+static void drm_destroy_user_data(struct drm_bo *bo, void *data)
+{
+  drmModeRmFB(bo->display->fd, (unsigned int)data);
 }
 
 static void drm_keyboard_handle_key(struct input_event *event)
@@ -509,14 +653,16 @@ int main(int argc, char *argv[])
   struct wl_window *wl_win = NULL;
   #endif
   #if defined(EGL_DRM)
-  int drm_fd = -1;
-  struct gbm_device *drm_dpy = NULL;
+  struct drm_display *drm_dpy = NULL;
+  char drm_driver_path[PATH_MAX];
+  struct __DRIcoreExtensionRec **drm_driver_extensions = NULL;
+  const struct __DRIextensionRec *drm_extensions[] = { &image_loader_extension.base, NULL };
   drmModeResPtr drm_resources = NULL;
   drmModeConnectorPtr drm_connector = NULL;
   drmModeEncoderPtr drm_encoder = NULL;
   drmModeCrtcPtr drm_crtc = NULL;
-  struct gbm_surface *drm_win = NULL;
-  struct gbm_bo *drm_bo = NULL;
+  struct drm_surface *drm_win = NULL;
+  struct drm_bo *drm_bo = NULL;
   unsigned int drm_fb_id = 0;
   drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
   int drm_keyboard = -1;
@@ -740,46 +886,81 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    if (getenv("DRICARD")) {
-      drm_fd = open(getenv("DRICARD"), O_RDWR);
-      if (drm_fd == -1) {
-        printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
-        goto out;
-      }
-    }
-    else {
-      drm_fd = open("/dev/dri/card0", O_RDWR);
-      if (drm_fd == -1) {
-        printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
-        goto out;
-      }
-    }
-
-    drm_dpy = gbm_create_device(drm_fd);
+    drm_dpy = calloc(1, sizeof(struct drm_display));
     if (!drm_dpy) {
-      printf("gbm_create_device failed\n");
+      printf("drm_display calloc failed: %s\n", strerror(errno));
       goto out;
     }
+    else {
+      if (getenv("DRICARD")) {
+        drm_dpy->fd = open(getenv("DRICARD"), O_RDWR);
+        if (drm_dpy->fd == -1) {
+          printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
+          goto out;
+        }
+      }
+      else {
+        drm_dpy->fd = open("/dev/dri/card0", O_RDWR);
+        if (drm_dpy->fd == -1) {
+          printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
+          goto out;
+        }
+      }
 
-    drm_resources = drmModeGetResources(drm_fd);
+      drm_dpy->name = "drm";
+      if (getenv("DRIDRIVER")) {
+        drm_dpy->driver_name = getenv("DRIDRIVER");
+      }
+      else {
+        drm_dpy->driver_name = "kms_swrast";
+      }
+
+      sprintf(drm_driver_path, "%s/%s_dri.so", DRIDRIVERDIR, drm_dpy->driver_name);
+      drm_dpy->driver = dlopen(drm_driver_path, RTLD_LAZY);
+      if (!drm_dpy->driver) {
+        printf("%s DRI driver not found\n", drm_dpy->driver_name);
+        goto out;
+      }
+
+      drm_driver_extensions = dlsym(drm_dpy->driver, "__driDriverExtensions");
+      if (!drm_dpy->driver) {
+        printf("DRI DriverExtensions not found\n");
+        goto out;
+      }
+
+      drm_dpy->core = drm_driver_extensions[0];
+      drm_dpy->dri2 = (struct __DRIdri2ExtensionRec *)drm_driver_extensions[2];
+      drm_dpy->screen = drm_dpy->dri2->createNewScreen2(0, drm_dpy->fd, drm_extensions, NULL, (const struct __DRIconfigRec ***)&drm_dpy->driver_configs, NULL);
+      if (!drm_dpy->screen) {
+        printf("DRI createNewScreen2 failed\n");
+        goto out;
+      }
+
+      drm_dpy->flush = (struct __DRI2flushExtensionRec *)drm_dpy->core->getExtensions(drm_dpy->screen)[1];
+      drm_dpy->image = (struct __DRIimageExtensionRec *)drm_dpy->core->getExtensions(drm_dpy->screen)[2];
+      drm_dpy->bo_create = drm_bo_create;
+      drm_dpy->bo_destroy = drm_bo_destroy;
+    }
+
+    drm_resources = drmModeGetResources(drm_dpy->fd);
     if (!drm_resources) {
       printf("drmModeGetResources failed\n");
       goto out;
     }
 
-    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[0]);
+    drm_connector = drmModeGetConnector(drm_dpy->fd, drm_resources->connectors[0]);
     if (!drm_connector) {
       printf("drmModeGetConnector failed\n");
       goto out;
     }
 
-    drm_encoder = drmModeGetEncoder(drm_fd, drm_resources->encoders[0]);
+    drm_encoder = drmModeGetEncoder(drm_dpy->fd, drm_resources->encoders[0]);
     if (!drm_encoder) {
       printf("drmModeGetEncoder failed\n");
       goto out;
     }
 
-    drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
+    drm_crtc = drmModeGetCrtc(drm_dpy->fd, drm_encoder->crtc_id);
     if (!drm_crtc) {
       printf("drmModeGetCrtc failed\n");
       goto out;
@@ -977,7 +1158,7 @@ int main(int argc, char *argv[])
   if (!strcmp(backend, "gl-fbdev")) {
     fb_win = calloc(1, sizeof(struct fb_window));
     if (!fb_win) {
-      printf("fb_window calloc failed\n");
+      printf("fb_window calloc failed: %s\n", strerror(errno));
       goto out;
     }
     else {
@@ -998,7 +1179,7 @@ int main(int argc, char *argv[])
 
     wl_win = calloc(1, sizeof(struct wl_window));
     if (!wl_win) {
-      printf("wl_window calloc failed\n");
+      printf("wl_window calloc failed: %s\n", strerror(errno));
       goto out;
     }
     else {
@@ -1020,10 +1201,15 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    drm_win = gbm_surface_create(drm_dpy, win_width, win_height, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+    drm_win = calloc(1, sizeof(struct drm_surface));
     if (!drm_win) {
-      printf("gbm_surface_create failed\n");
+      printf("drm_surface calloc failed: %s\n", strerror(errno));
       goto out;
+    }
+    else {
+      drm_win->display = drm_dpy;
+      drm_win->width = win_width;
+      drm_win->height = win_height;
     }
   }
   #endif
@@ -1356,17 +1542,18 @@ int main(int argc, char *argv[])
     if (!strcmp(backend, "egl-drm")) {
       if (redisplay) {
         if (drm_bo) {
-          gbm_surface_release_buffer(drm_win, drm_bo);
+          drm_dpy->surface_release_buffer(drm_win, drm_bo);
         }
-        drm_bo = gbm_surface_lock_front_buffer(drm_win);
+        drm_bo = drm_dpy->surface_lock_front_buffer(drm_win);
         if (drm_bo) {
-          drm_fb_id = (unsigned int)gbm_bo_get_user_data(drm_bo);
+          drm_fb_id = (unsigned int)drm_bo->user_data;
           if(!drm_fb_id) {
-            drmModeAddFB(drm_fd, win_width, win_height, 24, 32, win_width * 4, gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
-            gbm_bo_set_user_data(drm_bo, (void *)drm_fb_id, drm_destroy_user_data);
+            drmModeAddFB(drm_dpy->fd, win_width, win_height, 24, 32, win_width * 4, drm_bo->handle, &drm_fb_id);
+            drm_bo->user_data = (void *)drm_fb_id;
+            drm_bo->destroy_user_data = drm_destroy_user_data;
           }
-          drmModePageFlip(drm_fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
-          drmHandleEvent(drm_fd, &drm_context);
+          drmModePageFlip(drm_dpy->fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+          drmHandleEvent(drm_dpy->fd, &drm_context);
         }
         if (!animate) {
           redisplay = 0;
@@ -1645,11 +1832,11 @@ out:
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     if (drm_win) {
-      gbm_surface_destroy(drm_win);
+      free(drm_win);
     }
 
     if (drm_crtc) {
-      drmModeSetCrtc(drm_fd, drm_crtc->crtc_id, drm_crtc->buffer_id, drm_crtc->x, drm_crtc->y, &drm_connector->connector_id, 1, &drm_crtc->mode);
+      drmModeSetCrtc(drm_dpy->fd, drm_crtc->crtc_id, drm_crtc->buffer_id, drm_crtc->x, drm_crtc->y, &drm_connector->connector_id, 1, &drm_crtc->mode);
       drmModeFreeCrtc(drm_crtc);
     }
 
@@ -1666,11 +1853,23 @@ out:
     }
 
     if (drm_dpy) {
-      gbm_device_destroy(drm_dpy);
-    }
+      if (!drm_dpy->screen) {
+        for (opt = 0; drm_dpy->driver_configs[opt]; opt++)
+          free(drm_dpy->driver_configs[opt]);
+        free(drm_dpy->driver_configs);
 
-    if (drm_fd != -1) {
-      close(drm_fd);
+        drm_dpy->core->destroyScreen(drm_dpy->screen);
+      }
+
+      if (!drm_dpy->driver) {
+        dlclose(drm_dpy->driver);
+      }
+
+      if (drm_dpy->fd != -1) {
+        close(drm_dpy->fd);
+      }
+
+      free(drm_dpy);
     }
   }
   #endif

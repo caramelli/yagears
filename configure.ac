@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.7)
+AC_INIT(yagears, 0.8)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -39,11 +39,15 @@ if test x$enable_gl = xyes; then
 else
   if test x$enable_glesv1_cm = xyes; then
     PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, , enable_glesv1_cm=no)
-    GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
+    if test x$enable_glesv1_cm = xyes; then
+      GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
+    fi
   fi
   if test x$enable_glesv2 = xyes; then
     PKG_CHECK_MODULES(GLESV2, glesv2, , enable_glesv2=no)
-    GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
+    if test x$enable_glesv2 = xyes; then
+      GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
+    fi
   fi
 fi
 
@@ -145,9 +149,21 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
                         enable_egl_wayland=no)
     fi
     if test x$enable_egl_drm = xyes; then
-      PKG_CHECK_MODULES(DRM, gbm libdrm libevdev,
-                        AC_DEFINE(EGL_DRM, 1, Support for EGL with DRM platform),
-                        enable_egl_drm=no)
+      AC_MSG_CHECKING(for DRI driver)
+      DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri 2> /dev/null`
+      if test -d $DRIDRIVERDIR; then
+        AC_MSG_RESULT(yes)
+        PKG_CHECK_MODULES(DRM, libdrm libevdev,
+                          AC_DEFINE(EGL_DRM, 1, Support for EGL with DRM platform),
+                          enable_egl_drm=no)
+        if test x$enable_egl_drm = xyes; then
+          DRM_CFLAGS="$DRM_CFLAGS -D_FILE_OFFSET_BITS=64 -DDRIDRIVERDIR=\\\"$DRIDRIVERDIR\\\""
+          DRM_LIBS="$DRM_LIBS -ldl"
+        fi
+      else
+        AC_MSG_RESULT(no)
+        enable_egl_drm=no
+      fi
     fi
   else
     enable_egl_x11=no

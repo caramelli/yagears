@@ -249,7 +249,6 @@ out:
 
 static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
 {
-  const GLfloat material_ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
   GLint k;
 
   glPushMatrix();
@@ -257,8 +256,7 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
   glTranslatef(model_tx, model_ty, 0);
   glRotatef(model_rz, 0, 0, 1);
 
-  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, material_ambient);
-  glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, color);
+  glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color);
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
@@ -296,7 +294,7 @@ static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
 {
   gears_t *gears = NULL;
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
-  GLfloat zNear = 5, zFar = 60;
+  const GLfloat zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
