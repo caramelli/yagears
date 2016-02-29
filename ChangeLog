@@ -1,3 +1,15 @@
+commit 75c07c3d8891dbc0910200849866fc972ec9ad46
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Mon Feb 29 21:46:27 2016 +0100
+
+    add ambient color
+
+commit ec5a1347b34a91c275ce6670bc92292ab5a22fe1
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jan 9 15:50:48 2016 -0500
+
+    update ChangeLog
+
 commit 7a596fc3b307a737ab0ee42a6dfe2b75644c24a9
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Jan 9 15:45:16 2016 -0500
