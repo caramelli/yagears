@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.8)
+AC_INIT(yagears, 0.9)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -87,7 +87,7 @@ AC_ARG_ENABLE(egl-drm,
 if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
     save_LIBS=$LIBS
-    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl 2> /dev/null`"
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
     AC_CHECK_LIB(GL, glXCreateContext,
                  AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib) X11_LIBS=-lX11,
                  enable_gl_x11=no)
@@ -110,7 +110,7 @@ if test x$enable_gl = xyes; then
 
   if test x$enable_gl_fbdev = xyes; then
     save_LIBS=$LIBS
-    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl 2> /dev/null`"
+    LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
     AC_CHECK_LIB(GL, glFBDevCreateContext,
                  AC_DEFINE(GL_FBDEV, 1, Support for OpenGL Extension to Linux FBDev),
                  enable_gl_fbdev=no)
@@ -147,6 +147,16 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
       PKG_CHECK_MODULES(WAYLAND, wayland-client xkbcommon,
                         AC_DEFINE(EGL_WAYLAND, 1, Support for EGL with Wayland platform),
                         enable_egl_wayland=no)
+      if test x$enable_egl_wayland = xyes; then
+        AC_MSG_CHECKING(for wl_shell_surface_set_position)
+        save_CFLAGS=$CFLAGS
+        CFLAGS="$CFLAGS `$PKG_CONFIG --cflags wayland-client`"
+        save_LIBS=$LIBS
+        LIBS="$LIBS `$PKG_CONFIG --libs wayland-client`"
+        AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+        CFLAGS=$save_CFLAGS
+        LIBS=$save_LIBS
+      fi
     fi
     if test x$enable_egl_drm = xyes; then
       AC_MSG_CHECKING(for DRI driver)
@@ -183,6 +193,9 @@ fi
 AC_ARG_ENABLE(efl,
               AS_HELP_STRING(--disable-efl, disable EFL GUI toolkit),
               enable_efl=no, enable_efl=yes)
+AC_ARG_ENABLE(fltk,
+              AS_HELP_STRING(--disable-fltk, disable FLTK GUI toolkit),
+              enable_fltk=no, enable_fltk=yes)
 AC_ARG_ENABLE(glut,
               AS_HELP_STRING(--disable-glut, disable GLUT GUI toolkit),
               enable_glut=no, enable_glut=yes)
@@ -195,17 +208,52 @@ AC_ARG_ENABLE(qt,
 AC_ARG_ENABLE(sdl,
               AS_HELP_STRING(--disable-sdl, disable SDL GUI toolkit),
               enable_sdl=no, enable_sdl=yes)
+AC_ARG_ENABLE(sfml,
+              AS_HELP_STRING(--disable-sfml, disable SFML GUI toolkit),
+              enable_sfml=no, enable_sfml=yes)
+AC_ARG_ENABLE(wx,
+              AS_HELP_STRING(--disable-wx, disable wxWidgets GUI toolkit),
+              enable_wx=no, enable_wx=yes)
 
 if test x$enable_efl = xyes; then
   PKG_CHECK_MODULES(EFL, elementary, AC_DEFINE(EFL, 1, Support for EFL graphical user interface), enable_efl=no)
 fi
 
+if test x$enable_fltk = xyes; then
+  AC_PATH_PROG(FLTK_CONFIG, fltk-config, no)
+  if test x$FLTK_CONFIG != xno; then
+    FLTK_CFLAGS=`$FLTK_CONFIG --cflags`
+    FLTK_LIBS=`$FLTK_CONFIG --use-gl --ldflags`
+    AC_SUBST(FLTK_CFLAGS)
+    AC_SUBST(FLTK_LIBS)
+    AC_DEFINE(FLTK, 1, Support for FLTK graphical user interface)
+  else
+    enable_fltk=no
+  fi
+fi
+
 if test x$enable_glut = xyes; then
   PKG_CHECK_MODULES(GLUT, glut, AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface), enable_glut=no)
+  if test x$enable_glut = xno; then
+    AC_CHECK_LIB(glut, glutCreateWindow, enable_glut=yes, enable_glut=no)
+    if test x$enable_glut = xyes; then
+      AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface)
+      GLUT_LIBS=-lglut
+    fi
+  fi
 fi
 
 if test x$enable_gtk = xyes; then
-  PKG_CHECK_MODULES(GTK, gtkgl, AC_DEFINE(GTK, 1, Support for GTK+ graphical user interface), enable_gtk=no)
+  PKG_CHECK_MODULES(GTK, gtk+-3.0 >= 3.16.0, enable_gtk=yes, enable_gtk=no)
+  if test x$enable_gtk = xno; then
+    PKG_CHECK_MODULES(GTK, gtkgl-3.0, enable_gtk=yes, enable_gtk=no)
+    if test x$enable_gtk = xno; then
+      PKG_CHECK_MODULES(GTK, gtkgl-2.0, enable_gtk=yes, enable_gtk=no)
+    fi
+  fi
+  if test x$enable_gtk = xyes; then
+    AC_DEFINE(GTK, 1, Support for GTK+ graphical user interface)
+  fi
 fi
 
 if test x$enable_qt = xyes; then
@@ -213,19 +261,45 @@ if test x$enable_qt = xyes; then
 fi
 
 if test x$enable_sdl = xyes; then
-  PKG_CHECK_MODULES(SDL, sdl, AC_DEFINE(SDL, 1, Support for SDL graphical user interface), enable_sdl=no)
+  PKG_CHECK_MODULES(SDL, sdl2, enable_sdl=yes, enable_sdl=no)
+  if test x$enable_sdl = xno; then
+    PKG_CHECK_MODULES(SDL, sdl, enable_sdl=yes, enable_sdl=no)
+  fi
+  if test x$enable_sdl = xyes; then
+    AC_DEFINE(SDL, 1, Support for SDL graphical user interface)
+  fi
 fi
 
-if test x$enable_efl = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$enable_qt = xno -a x$enable_sdl = xno; then
+if test x$enable_sfml = xyes; then
+  PKG_CHECK_MODULES(SFML, sfml-graphics, AC_DEFINE(SFML, 1, Support for SFML graphical user interface), enable_sfml=no)
+fi
+
+if test x$enable_wx = xyes; then
+  AC_PATH_PROG(WX_CONFIG, wx-config, no)
+  if test x$WX_CONFIG != xno; then
+    WX_CFLAGS=`$WX_CONFIG --cflags`
+    WX_LIBS=`$WX_CONFIG --libs core,gl`
+    AC_SUBST(WX_CFLAGS)
+    AC_SUBST(WX_LIBS)
+    AC_DEFINE(WX, 1, Support for wxWidgets graphical user interface)
+  else
+    enable_wx=no
+  fi
+fi
+
+if test x$enable_efl = xno -a x$enable_fltk = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$enable_qt = xno -a x$enable_sdl = xno -a x$enable_sfml = xno -a x$enable_wx = xno; then
   AC_MSG_WARN(No graphical user interface toolkits found)
 fi
 
 AM_CONDITIONAL(HAVE_GLUT, test x$enable_glut = xyes)
 AM_CONDITIONAL(HAVE_GUI, test x$enable_efl = xyes ||
+                         test x$enable_fltk = xyes ||
                          test x$enable_glut = xyes ||
                          test x$enable_gtk = xyes ||
                          test x$enable_qt = xyes ||
-                         test x$enable_sdl = xyes)
+                         test x$enable_sdl = xyes ||
+                         test x$enable_sfml = xyes ||
+                         test x$enable_wx = xyes)
 
 AC_ARG_ENABLE(png,
               AS_HELP_STRING(--disable-png, disable PNG loader),
@@ -264,10 +338,13 @@ echo
 echo "Toolkits:"
 echo
 echo "  EFL                              $enable_efl"
+echo "  FLTK                             $enable_fltk"
 echo "  GLUT                             $enable_glut"
 echo "  GTK                              $enable_gtk"
 echo "  QT                               $enable_qt"
 echo "  SDL                              $enable_sdl"
+echo "  SFML                             $enable_sfml"
+echo "  WX                               $enable_wx"
 echo
 
 echo

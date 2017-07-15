@@ -16,10 +16,13 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
 and multiple graphical user interfaces:
 
   - EFL (Enlightenment Foundation Libraries)
+  - FLTK (Fast Light ToolKit)
   - GLUT (OpenGL Utility Toolkit)
   - GTK+ (Gimp ToolKit)
   - Qt (Q toolkit)
   - SDL (Simple Directmedia Layer)
+  - SFML (Simple and Fast Multimedia Library)
+  - wxWidgets (Windows X Widgets)
 
 Have fun,
 

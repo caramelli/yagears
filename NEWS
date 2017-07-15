@@ -1,3 +1,8 @@
+0.9
+---
+FLTK, SFML and wxWidgets support
+GTK+ with GtkGLExt deprecated
+
 0.8
 ---
 Ambient color

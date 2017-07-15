@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2015  Nicolas Caramelli
+  Copyright (C) 2013-2017  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -33,12 +33,28 @@
 #if defined(EFL)
 #include <Elementary.h>
 #endif
+#if defined(FLTK)
+#include <FL/Fl.H>
+#include <FL/Fl_Gl_Window.H>
+void fl_open_display();
+void fl_close_display();
+#endif
 #if defined(GLUT)
 #include <GL/glut.h>
+extern "C" {
+void glutLeaveMainLoop();
+void glutExit();
+}
 #endif
 #if defined(GTK)
-#include <gtk/gtkgl.h>
+#include <gtk/gtk.h>
+#if !GTK_CHECK_VERSION(3,16,0)
+#include <gtkgl/gtkglarea.h>
+#endif
 #include <gdk/gdkkeysyms.h>
+#ifndef GDK_Escape
+#include <gdk/gdkkeysyms-compat.h>
+#endif
 #endif
 #if defined(QT)
 #include <QGLWidget>
@@ -46,6 +62,13 @@
 #endif
 #if defined(SDL)
 #include <SDL.h>
+#endif
+#if defined(SFML)
+#include <SFML/Graphics.hpp>
+#endif
+#if defined(WX)
+#include <wx/wx.h>
+#include <wx/glcanvas.h>
 #endif
 
 #include "gears_engine.h"
@@ -157,6 +180,85 @@ static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
 }
 #endif
 
+#if defined(FLTK)
+class FlGlWindow : public Fl_Gl_Window {
+public:
+int idle_id, quit;
+
+FlGlWindow() : Fl_Gl_Window(0, 0, 0, 0)
+{
+  idle_id = 1;
+  quit = 0;
+}
+
+private:
+void draw()
+{
+  if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+}
+
+public:
+void idle()
+{
+  if (animate) {
+    if (!frames) return;
+    redraw();
+  }
+  else {
+    if (frames) frames = 0;
+  }
+}
+
+private:
+int handle(int event)
+{
+  if (event != FL_KEYDOWN)
+    return 0;
+
+  switch (Fl::event_key()) {
+    case FL_Escape:
+      idle_id = 0;
+      quit = 1;
+      return 1;
+    case ' ':
+      animate = !animate;
+      if (animate) {
+        redraw();
+      }
+      return 1;
+    case FL_Page_Down:
+      view_tz -= -5.0;
+      break;
+    case FL_Page_Up:
+      view_tz += -5.0;
+      break;
+    case FL_Down:
+      view_rx -= 5.0;
+      break;
+    case FL_Up:
+      view_rx += 5.0;
+      break;
+    case FL_Right:
+      view_ry -= 5.0;
+      break;
+    case FL_Left:
+      view_ry += 5.0;
+      break;
+    default:
+      return 0;
+  }
+
+  if (!animate) {
+    redraw();
+  }
+
+  return 1;
+}
+};
+#endif
+
 #if defined(GLUT)
 static void glutDisplay()
 {
@@ -227,15 +329,17 @@ static void glutSpecial(int key, int x, int y)
 #endif
 
 #if defined(GTK)
-static gboolean gtk_expose_event(GtkWidget *widget, GdkEventExpose *event, gpointer data)
+static gboolean gtk_render(GtkWidget *widget)
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
-  #ifndef GTKGLEXT_CHECK_VERSION
-  gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
+  #if !GTK_CHECK_VERSION(3,16,0)
+  #if GTK_CHECK_VERSION(3,0,0)
+  gtk_gl_area_swap_buffers(GTK_GL_AREA(widget));
   #else
-  gdk_gl_drawable_swap_buffers(gtk_widget_get_gl_drawable(widget));
+  gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
+  #endif
   #endif
 
   return TRUE;
@@ -245,7 +349,7 @@ static gboolean gtk_idle(gpointer data)
 {
   if (animate) {
     if (!frames) return TRUE;
-    gtk_widget_draw((GtkWidget *)data, NULL);
+    gtk_widget_queue_draw(GTK_WIDGET(data));
   }
   else {
     if (frames) frames = 0;
@@ -261,10 +365,10 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
       g_source_remove(*(guint *)data);
       gtk_main_quit();
       return TRUE;
-    case SDLK_SPACE:
+    case GDK_space:
       animate = !animate;
       if (animate) {
-        gtk_widget_draw(widget, NULL);
+        gtk_widget_queue_draw(widget);
       }
       return TRUE;
     case GDK_Page_Down:
@@ -290,7 +394,7 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
   }
 
   if (!animate) {
-    gtk_widget_draw(widget, NULL);
+    gtk_widget_queue_draw(widget);
   }
 
   return TRUE;
@@ -299,11 +403,11 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
 
 #if defined(QT)
 class QtGLWidget : public QGLWidget {
-int qt_timer_id;
+int timer_id;
 
 void initializeGL()
 {
-  qt_timer_id = startTimer(0);
+  timer_id = startTimer(0);
 }
 
 void paintGL()
@@ -328,7 +432,7 @@ void keyPressEvent(QKeyEvent *event)
 {
   switch (event->key()) {
     case Qt::Key_Escape:
-      killTimer(qt_timer_id);
+      killTimer(timer_id);
       close();
       return;
     case Qt::Key_Space:
@@ -408,12 +512,15 @@ static void SDL_KeyDownEvent(SDL_Window *window, SDL_Event *event, void *data)
 static void SDL_KeyDownEvent(SDL_Event *event, void *data)
 #endif
 {
+  if (event->type != SDL_KEYDOWN)
+    return;
+
   switch (event->key.keysym.sym) {
     case SDLK_ESCAPE:
       *(int *)data = 0;
-      SDL_Event quit;
-      quit.type = SDL_USEREVENT;
-      SDL_PushEvent(&quit);
+      SDL_Event sdl_quit;
+      sdl_quit.type = SDL_USEREVENT;
+      SDL_PushEvent(&sdl_quit);
       return;
     case SDLK_SPACE:
       animate = !animate;
@@ -457,6 +564,187 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
 }
 #endif
 
+#if defined(SFML)
+class SfRenderWindow : public sf::RenderWindow {
+public:
+int idle_id;
+
+SfRenderWindow() : RenderWindow(sf::VideoMode(win_width, win_height), "", sf::Style::Default, sf::ContextSettings(1))
+{
+  idle_id = 1;
+}
+
+void draw()
+{
+  if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+  display();
+}
+
+void idle()
+{
+  if (animate) {
+    if (!frames) return;
+    draw();
+  }
+  else {
+    if (frames) frames = 0;
+  }
+}
+
+void keyPressedEvent(sf::Event &event)
+{
+  if (event.type != sf::Event::KeyPressed)
+    return;
+
+  switch (event.key.code) {
+    case sf::Keyboard::Escape:
+      idle_id = 0;
+      event.type = sf::Event::Closed;
+      return;
+    case sf::Keyboard::Space:
+      animate = !animate;
+      if (animate) {
+        draw();
+      }
+      return;
+    case sf::Keyboard::PageDown:
+      view_tz -= -5.0;
+      break;
+    case sf::Keyboard::PageUp:
+      view_tz += -5.0;
+      break;
+    case sf::Keyboard::Down:
+      view_rx -= 5.0;
+      break;
+    case sf::Keyboard::Up:
+      view_rx += 5.0;
+      break;
+    case sf::Keyboard::Right:
+      view_ry -= 5.0;
+      break;
+    case sf::Keyboard::Left:
+      view_ry += 5.0;
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    draw();
+  }
+}
+};
+#endif
+
+#if defined(WX)
+class WxGLContext : public wxGLContext {
+public:
+WxGLContext(wxGLCanvas *canvas) : wxGLContext(canvas)
+{
+  SetCurrent(*canvas);
+}
+};
+
+class WxGLCanvas : public wxGLCanvas {
+public:
+WxGLCanvas(wxWindow *parent, int *glconfig) : wxGLCanvas(parent, (wxGLCanvas*)NULL, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0, wxT("GLCanvas"), glconfig), glcontext(NULL), timer_id(this)
+{
+  timer_id.Start(1);
+}
+
+private:
+WxGLContext *glcontext;
+wxTimer timer_id;
+
+void WxPaintEventHandler(wxPaintEvent &event)
+{
+  if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+  if (!glcontext)
+    glcontext = new WxGLContext(this);
+  SwapBuffers();
+}
+
+void WxTimerEventHandler(wxTimerEvent &event)
+{
+  if (animate) {
+    if (!frames) return;
+    Refresh();
+  }
+  else {
+    if (frames) frames = 0;
+  }
+}
+
+void WxKeyEventHandler(wxKeyEvent &event)
+{
+  switch (event.GetKeyCode()) {
+    case WXK_ESCAPE:
+      timer_id.Stop();
+      wxExit();
+      return;
+    case WXK_SPACE:
+      animate = !animate;
+      if (animate) {
+        Refresh();
+      }
+      return;
+    case WXK_PAGEDOWN:
+      view_tz -= -5.0;
+      break;
+    case WXK_PAGEUP:
+      view_tz += -5.0;
+      break;
+    case WXK_DOWN:
+      view_rx -= 5.0;
+      break;
+    case WXK_UP:
+      view_rx += 5.0;
+      break;
+    case WXK_RIGHT:
+      view_ry -= 5.0;
+      break;
+    case WXK_LEFT:
+      view_ry += 5.0;
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    Refresh();
+  }
+}
+
+DECLARE_EVENT_TABLE();
+};
+
+BEGIN_EVENT_TABLE(WxGLCanvas, wxGLCanvas)
+  EVT_PAINT(WxGLCanvas::WxPaintEventHandler)
+  EVT_KEY_DOWN(WxGLCanvas::WxKeyEventHandler)
+  EVT_TIMER(wxID_ANY, WxGLCanvas::WxTimerEventHandler)
+END_EVENT_TABLE()
+
+class WxFrame : public wxFrame {
+public:
+WxFrame() : wxFrame(NULL, wxID_ANY, wxEmptyString, wxPoint(win_posx, win_posy))
+{
+  int wx_glconfig[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 1, 0 };
+  WxGLCanvas *wx_glcanvas = new WxGLCanvas(this, wx_glconfig);
+  SetClientSize(win_width, win_height);
+  Show();
+}
+};
+
+wxAppConsole *WxAppInitializer()
+{
+  return new wxApp;
+}
+#endif
+
 /******************************************************************************/
 
 int main(int argc, char *argv[])
@@ -467,6 +755,9 @@ int main(int argc, char *argv[])
   #if defined(EFL)
   Evas_Object *elm_win;
   Ecore_Animator *ecore_animator_id;
+  #endif
+  #if defined(FLTK)
+  FlGlWindow *fltk_win;
   #endif
   #if defined(GLUT)
   int glut_win;
@@ -487,12 +778,23 @@ int main(int argc, char *argv[])
   #endif
   int sdl_idle_id;
   #endif
+  #if defined(SFML)
+  sf::VideoMode *sfml_app;
+  SfRenderWindow *sfml_win;
+  #endif
+  #if defined(WX)
+  wxAppInitializer *wx_app;
+  WxFrame *wx_win;
+  #endif
 
   /* process command line */
 
   memset(toolkits, 0, sizeof(toolkits));
   #if defined(EFL)
   strcat(toolkits, "efl ");
+  #endif
+  #if defined(FLTK)
+  strcat(toolkits, "fltk ");
   #endif
   #if defined(GLUT)
   strcat(toolkits, "glut ");
@@ -505,6 +807,12 @@ int main(int argc, char *argv[])
   #endif
   #if defined(SDL)
   strcat(toolkits, "sdl ");
+  #endif
+  #if defined(SFML)
+  strcat(toolkits, "sfml ");
+  #endif
+  #if defined(WX)
+  strcat(toolkits, "wx ");
   #endif
 
   while ((opt = getopt(argc, argv, "t:e:h")) != -1) {
@@ -575,6 +883,15 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(FLTK)
+  if (!strcmp(toolkit, "fltk")) {
+    fl_open_display();
+
+    win_width = Fl::w();
+    win_height = Fl::h();
+  }
+  #endif
+
   #if defined(GLUT)
   if (!strcmp(toolkit, "glut")) {
     glutInit(&argc, argv);
@@ -619,6 +936,24 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_app = new sf::VideoMode;
+
+    win_width = sfml_app->getDesktopMode().width;
+    win_height = sfml_app->getDesktopMode().height;
+  }
+  #endif
+
+  #if defined(WX)
+  if (!strcmp(toolkit, "wx")) {
+    wx_app = new wxAppInitializer(WxAppInitializer);
+    wxInitialize(argc, argv);
+
+    wxDisplaySize(&win_width, &win_height);
+  }
+  #endif
+
   if (getenv("WIDTH")) {
     win_width = atoi(getenv("WIDTH"));
   }
@@ -654,6 +989,16 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(FLTK)
+  if (!strcmp(toolkit, "fltk")) {
+    fltk_win = new FlGlWindow;
+    fltk_win->resize(win_posx, win_posy, win_width, win_height);
+    fltk_win->show();
+    while (!fltk_win->valid())
+      Fl::check();
+  }
+  #endif
+
   #if defined(GLUT)
   if (!strcmp(toolkit, "glut")) {
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);
@@ -670,28 +1015,28 @@ int main(int argc, char *argv[])
   #if defined(GTK)
   if (!strcmp(toolkit, "gtk")) {
     gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    GtkWidget *gtk_drawing_area;
-    #ifndef GTKGLEXT_CHECK_VERSION
-    int gdk_glconfig[] = { GDK_GL_RGBA, GDK_GL_DOUBLEBUFFER, GDK_GL_DEPTH_SIZE,1, GDK_GL_NONE };
-    gtk_drawing_area = gtk_gl_area_new(gdk_glconfig);
+    GtkWidget *gtk_glarea;
+    #if GTK_CHECK_VERSION(3,16,0)
+    gtk_glarea = gtk_gl_area_new();
+    gtk_gl_area_set_has_depth_buffer(GTK_GL_AREA(gtk_glarea), TRUE);
+    g_signal_connect(gtk_glarea, "render", G_CALLBACK(gtk_render), NULL);
     #else
-    GdkGLConfig *gdk_glconfig = gdk_gl_config_new_by_mode((GdkGLConfigMode)(GDK_GL_MODE_DOUBLE | GDK_GL_MODE_DEPTH));
-    gtk_drawing_area = gtk_drawing_area_new();
-    gtk_widget_set_gl_capability(gtk_drawing_area, gdk_glconfig, NULL, TRUE, GDK_GL_RGBA_TYPE);
+    int gdk_glconfig[] = { GDK_GL_RGBA, GDK_GL_DOUBLEBUFFER, GDK_GL_DEPTH_SIZE, 1, GDK_GL_NONE };
+    gtk_glarea = gtk_gl_area_new(gdk_glconfig);
+    #if GTK_CHECK_VERSION(3,0,0)
+    g_signal_connect(gtk_glarea, "draw", G_CALLBACK(gtk_render), NULL);
+    #else
+    g_signal_connect(gtk_glarea, "expose-event", G_CALLBACK(gtk_render), NULL);
     #endif
-    g_signal_connect(gtk_drawing_area, "expose_event", G_CALLBACK(gtk_expose_event), NULL);
-    gtk_container_add(GTK_CONTAINER(gtk_win), gtk_drawing_area);
-    gtk_idle_id = g_idle_add(gtk_idle, gtk_drawing_area);
-    g_signal_connect(gtk_win, "key_press_event", G_CALLBACK(gtk_key_press_event), &gtk_idle_id);
+    #endif
+    gtk_container_add(GTK_CONTAINER(gtk_win), gtk_glarea);
+    gtk_idle_id = g_idle_add(gtk_idle, gtk_glarea);
+    g_signal_connect(gtk_win, "key-press-event", G_CALLBACK(gtk_key_press_event), &gtk_idle_id);
     gtk_window_set_default_size(GTK_WINDOW(gtk_win), win_width, win_height);
     gtk_window_move(GTK_WINDOW(gtk_win), win_posx, win_posy);
-    gtk_widget_show(gtk_drawing_area);
+    gtk_widget_show(gtk_glarea);
     gtk_widget_show(gtk_win);
-    #ifndef GTKGLEXT_CHECK_VERSION
-    gtk_gl_area_make_current(GTK_GL_AREA(gtk_drawing_area));
-    #else
-    gdk_gl_drawable_gl_begin(gtk_widget_get_gl_drawable(gtk_drawing_area), gtk_widget_get_gl_context(gtk_drawing_area));
-    #endif
+    gtk_gl_area_make_current(GTK_GL_AREA(gtk_glarea));
   }
   #endif
 
@@ -720,6 +1065,18 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_win = new SfRenderWindow;
+  }
+  #endif
+
+  #if defined(WX)
+  if (!strcmp(toolkit, "wx")) {
+    wx_win = new WxFrame;
+  }
+  #endif
+
   /* drawing (main event loop) */
 
   err = gears_engine_init(gears_engine, win_width, win_height);
@@ -734,6 +1091,20 @@ int main(int argc, char *argv[])
   #if defined(EFL)
   if (!strcmp(toolkit, "efl")) {
     elm_run();
+  }
+  #endif
+
+  #if defined(FLTK)
+  if (!strcmp(toolkit, "fltk")) {
+    fltk_win->redraw();
+    Fl::check();
+    while (1) {
+      if (fltk_win->idle_id)
+        fltk_win->idle();
+      Fl::check();
+      if (fltk_win->quit)
+        break;
+    }
   }
   #endif
 
@@ -770,17 +1141,39 @@ int main(int argc, char *argv[])
         SDL_Idle();
         #endif
       SDL_Event event;
-      memset(&event, 0, sizeof(SDL_Event));
       while (SDL_PollEvent(&event))
-        if (event.type == SDL_KEYDOWN)
-          #if SDL_VERSION_ATLEAST(2, 0, 0)
-          SDL_KeyDownEvent(sdl_win, &event, &sdl_idle_id);
-          #else
-          SDL_KeyDownEvent(&event, &sdl_idle_id);
-          #endif
+        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        SDL_KeyDownEvent(sdl_win, &event, &sdl_idle_id);
+        #else
+        SDL_KeyDownEvent(&event, &sdl_idle_id);
+        #endif
       if (event.type == SDL_USEREVENT)
         break;
     }
+  }
+  #endif
+
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_win->draw();
+    while (1) {
+      if (sfml_win->idle_id)
+        sfml_win->idle();
+      sf::Event event;
+      while (sfml_win->pollEvent(event)) {
+        sfml_win->keyPressedEvent(event);
+        if (event.type == sf::Event::Closed)
+          break;
+      }
+      if (event.type == sf::Event::Closed)
+        break;
+    }
+  }
+  #endif
+
+  #if defined(WX)
+  if (!strcmp(toolkit, "wx")) {
+    wxEntry(argc, argv);
   }
   #endif
 
@@ -803,6 +1196,13 @@ out:
   if (!strcmp(toolkit, "efl")) {
     evas_object_del(elm_win);
     elm_shutdown();
+  }
+  #endif
+
+  #if defined(FLTK)
+  if (!strcmp(toolkit, "fltk")) {
+    delete fltk_win;
+    fl_close_display();
   }
   #endif
 
@@ -835,6 +1235,20 @@ out:
     SDL_FreeSurface(sdl_win);
     #endif
     SDL_Quit();
+  }
+  #endif
+
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    delete sfml_win;
+    delete sfml_app;
+  }
+  #endif
+
+  #if defined(WX)
+  if (!strcmp(toolkit, "wx")) {
+    delete wx_win;
+    delete wx_app;
   }
   #endif
 

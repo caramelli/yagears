@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2015  Nicolas Caramelli
+  Copyright (C) 2013-2017  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -1194,7 +1194,9 @@ int main(int argc, char *argv[])
       goto out;
     }
 
+    #if defined(HAVE_WL_SHELL_SURFACE_SET_POSITION)
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
+    #endif
 
     wl_shell_surface_set_toplevel(wl_shell_surface);
   }

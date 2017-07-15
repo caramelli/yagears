@@ -37,7 +37,7 @@ endif
 if HAVE_GUI
 bin_PROGRAMS += yagears-gui
 yagears_gui_SOURCES = gui.cc
-yagears_gui_CXXFLAGS = @EFL_CFLAGS@ @GLUT_CFLAGS@ @GTK_CFLAGS@ @QT_CFLAGS@ @SDL_CFLAGS@
+yagears_gui_CXXFLAGS = @EFL_CFLAGS@ @FLTK_CFLAGS@ @GLUT_CFLAGS@ @GTK_CFLAGS@ @QT_CFLAGS@ @SDL_CFLAGS@ @SFML_CFLAGS@ @WX_CFLAGS@
 yagears_gui_LDFLAGS = -Wl,--whole-archive,.libs/libyagears.a,--no-whole-archive
-yagears_gui_LDADD = libyagears.la @EFL_LIBS@ @GLUT_LIBS@ @GTK_LIBS@ @QT_LIBS@ @SDL_LIBS@
+yagears_gui_LDADD = libyagears.la @EFL_LIBS@ @FLTK_LIBS@ @GLUT_LIBS@ @GTK_LIBS@ @QT_LIBS@ @SDL_LIBS@ @SFML_LIBS@ @WX_LIBS@
 endif

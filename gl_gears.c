@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2015  Nicolas Caramelli
+  Copyright (C) 2013-2017  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -87,19 +87,19 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     /* front face normal */
     glNormal3f(0, 0, 1);
     /* front face vertices */
-    glTexCoord2f(0.5 * r2 * s[1] / r1 + 0.5, 0.5 * r2 * c[1] / r1 + 0.5);
+    glTexCoord2f(0.36 * r2 * s[1] / r1 + 0.5, 0.36 * r2 * c[1] / r1 + 0.5);
     glVertex3f(r2 * c[1], r2 * s[1], width / 2);
-    glTexCoord2f(0.5 * r2 * s[2] / r1 + 0.5, 0.5 * r2 * c[2] / r1 + 0.5);
+    glTexCoord2f(0.36 * r2 * s[2] / r1 + 0.5, 0.36 * r2 * c[2] / r1 + 0.5);
     glVertex3f(r2 * c[2], r2 * s[2], width / 2);
-    glTexCoord2f(0.5 * r1 * s[0] / r1 + 0.5, 0.5 * r1 * c[0] / r1 + 0.5);
+    glTexCoord2f(0.36 * r1 * s[0] / r1 + 0.5, 0.36 * r1 * c[0] / r1 + 0.5);
     glVertex3f(r1 * c[0], r1 * s[0], width / 2);
-    glTexCoord2f(0.5 * r1 * s[3] / r1 + 0.5, 0.5 * r1 * c[3] / r1 + 0.5);
+    glTexCoord2f(0.36 * r1 * s[3] / r1 + 0.5, 0.36 * r1 * c[3] / r1 + 0.5);
     glVertex3f(r1 * c[3], r1 * s[3], width / 2);
-    glTexCoord2f(0.5 * r0 * s[0] / r1 + 0.5, 0.5 * r0 * c[0] / r1 + 0.5);
+    glTexCoord2f(0.36 * r0 * s[0] / r1 + 0.5, 0.36 * r0 * c[0] / r1 + 0.5);
     glVertex3f(r0 * c[0], r0 * s[0], width / 2);
-    glTexCoord2f(0.5 * r1 * s[4] / r1 + 0.5, 0.5 * r1 * c[4] / r1 + 0.5);
+    glTexCoord2f(0.36 * r1 * s[4] / r1 + 0.5, 0.36 * r1 * c[4] / r1 + 0.5);
     glVertex3f(r1 * c[4], r1 * s[4], width / 2);
-    glTexCoord2f(0.5 * r0 * s[4] / r1 + 0.5, 0.5 * r0 * c[4] / r1 + 0.5);
+    glTexCoord2f(0.36 * r0 * s[4] / r1 + 0.5, 0.36 * r0 * c[4] / r1 + 0.5);
     glVertex3f(r0 * c[4], r0 * s[4], width / 2);
     glTexCoord2f(0, 0);
     /* front face end */
@@ -240,9 +240,7 @@ static gears_t *gl_gears_init(int win_width, int win_height)
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gears->image.width, gears->image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gears->image.pixel_data);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+  glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
 
   gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
   if (!gears->gear1) {
