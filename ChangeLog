@@ -1,3 +1,15 @@
+commit 8373f67c5eaa719a3392eb3a10577c3284c20875
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jul 15 10:35:47 2017 +0200
+
+    add FLTK, SFML and wxWidgets support, remove GTK+ with GtkGLExt support
+
+commit 616b9df03e826b141715d3c473f35212d5d3c1a1
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Mon Feb 29 21:47:53 2016 +0100
+
+    update ChangeLog
+
 commit 75c07c3d8891dbc0910200849866fc972ec9ad46
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Mon Feb 29 21:46:27 2016 +0100
