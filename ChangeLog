@@ -1,3 +1,15 @@
+commit 8cbf51e2fd576096b45712e3fc249c5b08c2dbd8
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Sep 27 06:39:48 2019 +0200
+
+    restore GBM usage, add Raspberry Pi Dispmanx support, add GLFW support
+
+commit 4b674187054879cfafcc1b5b9b676dec2900b69a
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jul 15 10:36:08 2017 +0200
+
+    update ChangeLog
+
 commit 8373f67c5eaa719a3392eb3a10577c3284c20875
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Jul 15 10:35:47 2017 +0200
