@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2017  Nicolas Caramelli
+  Copyright (C) 2013-2019  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,8 @@
   THE SOFTWARE.
 */
 
+#include "config.h"
+
 #include <errno.h>
 #include <math.h>
 #include <signal.h>
@@ -29,8 +31,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
-
-#include "config.h"
 
 #if defined(GL_X11)
 #include <GL/glx.h>
@@ -61,6 +61,7 @@
 #if defined(EGL_DRM)
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <gbm.h>
 #include <limits.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
@@ -75,44 +76,49 @@ struct __DRIdrawableRec;
 struct __DRIimageList;
 struct __DRIimageLoaderExtensionRec {
   struct __DRIextensionRec base;
-  int (*getBuffers)(struct __DRIdrawableRec *drawable, unsigned int format, unsigned int *stamp, void *loaderPrivate, unsigned int buffer_mask, struct __DRIimageList *buffers);
+  int (*getBuffers)(struct __DRIdrawableRec *, unsigned int, unsigned int *, void *, unsigned int, struct __DRIimageList *);
 };
 
 struct __DRIscreenRec;
 struct __DRIconfigRec;
 struct __DRIcoreExtensionRec {
   struct __DRIextensionRec base;
-  struct __DRIscreenRec *(*createNewScreen)(int screen, int fd, unsigned int sarea_handle, const struct __DRIextensionRec **extensions, struct __DRIconfigRec ***driverConfigs, void *loaderPrivate);
-  void (*destroyScreen)(struct __DRIscreenRec *screen);
-  const struct __DRIextensionRec **(*getExtensions)(struct __DRIscreenRec *screen);
+  struct __DRIscreenRec *(*createNewScreen)(int, int, unsigned int, struct __DRIextensionRec **, struct __DRIconfigRec ***, void *);
+  void (*destroyScreen)(struct __DRIscreenRec *);
+  struct __DRIextensionRec **(*getExtensions)(struct __DRIscreenRec *);
 };
 
 struct __DRIcontextRec;
 struct __DRIbufferRec;
 struct __DRIdri2ExtensionRec {
   struct __DRIextensionRec base;
-  struct __DRIscreenRec *(*createNewScreen)(int screen, int fd, const struct __DRIextensionRec **extensions, struct __DRIconfigRec ***driver_configs, void *loaderPrivate);
-  struct __DRIdrawableRec *(*createNewDrawable)(struct __DRIscreenRec *screen, const struct __DRIconfigRec *config, void *loaderPrivate);
-  struct __DRIcontextRec *(*createNewContext)(struct __DRIscreenRec *screen, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, void *loaderPrivate);
-  unsigned int (*getAPIMask)(struct __DRIscreenRec *screen);
-  struct __DRIcontextRec *(*createNewContextForAPI)(struct __DRIscreenRec *screen, int api, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, void *data);
-  struct __DRIbufferRec *(*allocateBuffer)(struct __DRIscreenRec *screen, unsigned int attachment, unsigned int format, int width, int height);
-  void (*releaseBuffer)(struct __DRIscreenRec *screen, struct __DRIbufferRec *buffer);
-  struct __DRIcontextRec *(*createContextAttribs)(struct __DRIscreenRec *screen, int api, const struct __DRIconfigRec *config, struct __DRIcontextRec *shared, unsigned int num_attribs, const unsigned int *attribs, unsigned int *error, void *loaderPrivate);
-  struct __DRIscreenRec *(*createNewScreen2)(int screen, int fd, const struct __DRIextensionRec **extensions, const struct __DRIextensionRec **driver_extensions, const struct __DRIconfigRec ***driver_configs, void *loaderPrivate);
+  struct __DRIscreenRec *(*createNewScreen)(int, int, struct __DRIextensionRec **, struct __DRIconfigRec ***, void *);
+  struct __DRIdrawableRec *(*createNewDrawable)(struct __DRIscreenRec *, struct __DRIconfigRec *, void *);
+  struct __DRIcontextRec *(*createNewContext)(struct __DRIscreenRec *, struct __DRIconfigRec *, struct __DRIcontextRec *, void *);
+  unsigned int (*getAPIMask)(struct __DRIscreenRec *);
+  struct __DRIcontextRec *(*createNewContextForAPI)(struct __DRIscreenRec *, int, struct __DRIconfigRec *, struct __DRIcontextRec *, void *);
+  struct __DRIbufferRec *(*allocateBuffer)(struct __DRIscreenRec *, unsigned int, unsigned int, int, int);
+  void (*releaseBuffer)(struct __DRIscreenRec *, struct __DRIbufferRec *);
+  struct __DRIcontextRec *(*createContextAttribs)(struct __DRIscreenRec *, int, struct __DRIconfigRec *, struct __DRIcontextRec *, unsigned int, unsigned int *, unsigned int *, void *);
+  struct __DRIscreenRec *(*createNewScreen2)(int, int, struct __DRIextensionRec **, struct __DRIextensionRec **, struct __DRIconfigRec ***, void *);
 };
 
 struct __DRIimageRec;
 struct __DRIimageExtensionRec {
   struct __DRIextensionRec base;
-  struct __DRIimageRec *(*createImageFromName)(struct __DRIscreenRec *screen, int width, int height, int format, int name, int pitch, void *loaderPrivate);
-  struct __DRIimageRec *(*createImageFromRenderbuffer)(struct __DRIcontextRec *context, int renderbuffer, void *loaderPrivate);
-  void (*destroyImage)(struct __DRIimageRec *image);
-  struct __DRIimageRec *(*createImage)(struct __DRIscreenRec *screen, int width, int height, int format, unsigned int use, void *loaderPrivate);
-  int (*queryImage)(struct __DRIimageRec *image, int attrib, int *value);
+  struct __DRIimageRec *(*createImageFromName)(struct __DRIscreenRec *, int, int, int, int, int, void *);
+  struct __DRIimageRec *(*createImageFromRenderbuffer)(struct __DRIcontextRec *, int, void *);
+  void (*destroyImage)(struct __DRIimageRec *);
+  struct __DRIimageRec *(*createImage)(struct __DRIscreenRec *, int, int, int, unsigned int, void *);
+  int (*queryImage)(struct __DRIimageRec *, int, int *);
 };
 #endif
-#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+#if defined(EGL_RPI)
+#include <fcntl.h>
+#include <termios.h>
+#include <bcm_host.h>
+#endif
+#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
 #include <EGL/egl.h>
 #endif
 
@@ -447,24 +453,30 @@ static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_g
 #endif
 
 #if defined(EGL_DRM)
+#define drm_display gbm_device
+#define drm_surface gbm_surface
+#define drm_bo gbm_bo
+
 struct drm_display {
-  struct drm_display *(*dummy)(int fd);
+  struct drm_display *(*dummy)(int);
   int fd;
   char *name;
   unsigned int refcount;
   struct stat stat;
-  void (*destroy)(struct drm_display *display);
-  int (*is_format_supported)(struct drm_display *display, unsigned int format, unsigned int usage);
-  struct drm_bo *(*bo_create)(struct drm_display *display, unsigned int width, unsigned int height, unsigned int format, unsigned int usage);
-  struct drm_bo *(*bo_import)(struct drm_display *display, unsigned int type, void *buffer, unsigned int usage);
-  int (*bo_write)(struct drm_bo *bo, void *buf, size_t data);
-  int (*bo_get_fd)(struct drm_bo *bo);
-  void (*bo_destroy)(struct drm_bo *bo);
-  struct drm_surface *(*surface_create)(struct drm_display *display, unsigned int width, unsigned int height, unsigned int format, unsigned int flags);
-  struct drm_bo *(*surface_lock_front_buffer)(struct drm_surface *surface);
-  void (*surface_release_buffer)(struct drm_surface *surface, struct drm_bo *bo);
-  int (*surface_has_free_buffers)(struct drm_surface *surface);
-  void (*surface_destroy)(struct drm_surface *surface);
+  void (*destroy)(struct drm_display *);
+  int (*is_format_supported)(struct drm_display *, unsigned int, unsigned int);
+  struct drm_bo *(*bo_create)(struct drm_display *, unsigned int, unsigned int, unsigned int, unsigned int);
+  struct drm_bo *(*bo_import)(struct drm_display *, unsigned int, void *, unsigned int);
+  int (*bo_write)(struct drm_bo *, void *, size_t);
+  #if DRI_MAJOR_VERSION > 10 || (DRI_MAJOR_VERSION == 10 && DRI_MINOR_VERSION >= 2)
+  int (*bo_get_fd)(struct drm_bo *);
+  #endif
+  void (*bo_destroy)(struct drm_bo *);
+  struct drm_surface *(*surface_create)(struct drm_display *, unsigned int, unsigned int, unsigned int, unsigned int);
+  struct drm_bo *(*surface_lock_front_buffer)(struct drm_surface *);
+  void (*surface_release_buffer)(struct drm_surface *, struct drm_bo *);
+  int (*surface_has_free_buffers)(struct drm_surface *);
+  void (*surface_destroy)(struct drm_surface *);
   int type;
   char *driver_name;
   void *driver;
@@ -472,20 +484,28 @@ struct drm_display {
   struct __DRIcoreExtensionRec *core;
   struct __DRIdri2ExtensionRec *dri2;
   struct __DRIimageExtensionRec *image;
+  #if DRI_MAJOR_VERSION > 10 || (DRI_MAJOR_VERSION == 10 && DRI_MINOR_VERSION >= 3)
   struct __DRIswrastExtensionRec *swrast;
+  #endif
   struct __DRI2flushExtensionRec *flush;
   struct __DRIdri2LoaderExtensionRec *loader;
   struct __DRIconfigRec **driver_configs;
+  #if DRI_MAJOR_VERSION > 10 || (DRI_MAJOR_VERSION == 10 && DRI_MINOR_VERSION >= 2)
   struct __DRIextensionRec **extensions;
+  #else
+  struct __DRIextensionRec *extensions[5];
+  #endif
   struct __DRIextensionRec **driver_extensions;
-  struct __DRIimageRec *(*lookup_image)(struct __DRIscreenRec *screen, void *image, void *data);
+  struct __DRIimageRec *(*lookup_image)(struct __DRIscreenRec *, void *, void *);
   void *lookup_user_data;
-  struct __DRIbufferRec *(*get_buffers)(struct __DRIdrawableRec *drawable, int *width, int *height, unsigned int *attachments, int count, int *out_count, void *data);
-  void (*flush_front_buffer)(struct __DRIdrawableRec *drawable, void *data);
-  struct __DRIbufferRec *(*get_buffers_with_format)(struct __DRIdrawableRec *drawable, int *width, int *height, unsigned int *attachments, int count, int *out_count, void *data);
-  int (*image_get_buffers)(struct __DRIdrawableRec *drawable, unsigned int format, unsigned int *stamp, void *loaderPrivate, unsigned int buffer_mask, struct __DRIimageList *buffers);
-  void (*swrast_put_image2)(struct __DRIdrawableRec *drawable, int op, int x, int y, int width, int height, int stride, char *data, void *loaderPrivate);
-  void (*swrast_get_image)(struct __DRIdrawableRec *drawable, int x, int y, int width, int height, char *data, void *loaderPrivate);
+  struct __DRIbufferRec *(*get_buffers)(struct __DRIdrawableRec *, int *, int *, unsigned int *, int, int *, void *);
+  void (*flush_front_buffer)(struct __DRIdrawableRec *, void *);
+  struct __DRIbufferRec *(*get_buffers_with_format)(struct __DRIdrawableRec *, int *, int *, unsigned int *, int, int *, void *);
+  int (*image_get_buffers)(struct __DRIdrawableRec *, unsigned int, unsigned int *, void *, unsigned int, struct __DRIimageList *);
+  #if DRI_MAJOR_VERSION > 10 || (DRI_MAJOR_VERSION == 10 && DRI_MINOR_VERSION >= 3)
+  void (*swrast_put_image2)(struct __DRIdrawableRec *, int, int, int, int, int, int, char *, void *);
+  void (*swrast_get_image)(struct __DRIdrawableRec *, int, int, int, int, char *, void *);
+  #endif
 };
 
 struct drm_surface {
@@ -505,7 +525,7 @@ struct drm_bo {
   unsigned int format;
   unsigned long long handle;
   void *user_data;
-  void (*destroy_user_data)(struct drm_bo *bo, void *data);
+  void (*destroy_user_data)(struct drm_bo *, void *);
   struct __DRIimageRec *image;
 };
 
@@ -532,6 +552,7 @@ static struct drm_bo *drm_bo_create(struct drm_display *display, unsigned int wi
   bo->height = height;
   bo->format = format;
   bo->image = display->image->createImage(display->screen, width, height, 0x1002, 2, bo);
+  display->image->queryImage(bo->image, 0x2000, (int *)&bo->stride);
   display->image->queryImage(bo->image, 0x2001, (int *)&bo->handle);
 
   return bo;
@@ -546,7 +567,12 @@ static void drm_bo_destroy(struct drm_bo *bo)
 
 static void drm_destroy_user_data(struct drm_bo *bo, void *data)
 {
-  drmModeRmFB(bo->display->fd, (unsigned int)data);
+  drmModeRmFB(bo->display->fd, (uintptr_t)data);
+}
+
+static void gbm_destroy_user_data(struct gbm_bo *bo, void *data)
+{
+  drmModeRmFB(gbm_device_get_fd(gbm_bo_get_device(bo)), (uintptr_t)data);
 }
 
 static void drm_keyboard_handle_key(struct input_event *event)
@@ -589,6 +615,51 @@ static void drm_keyboard_handle_key(struct input_event *event)
   if (!animate) {
     redisplay = 1;
   }
+}
+#endif
+
+#if defined(EGL_RPI)
+static void rpi_keyboard_handle_key(unsigned char event)
+{
+  switch (event) {
+    case 27:
+      sighandler(SIGTERM);
+      return;
+    case ' ':
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case 'd':
+      view_tz -= -5.0;
+      break;
+    case 'u':
+      view_tz += -5.0;
+      break;
+    case 'j':
+      view_rx -= 5.0;
+      break;
+    case 'k':
+      view_rx += 5.0;
+      break;
+    case 'l':
+      view_ry -= 5.0;
+      break;
+    case 'h':
+      view_ry += 5.0;
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+
 }
 #endif
 
@@ -653,27 +724,40 @@ int main(int argc, char *argv[])
   struct wl_window *wl_win = NULL;
   #endif
   #if defined(EGL_DRM)
+  int drm_fd = -1;
   struct drm_display *drm_dpy = NULL;
   char drm_driver_path[PATH_MAX];
   struct __DRIcoreExtensionRec **drm_driver_extensions = NULL;
-  const struct __DRIextensionRec *drm_extensions[] = { &image_loader_extension.base, NULL };
+  struct __DRIextensionRec *drm_extensions[] = { &image_loader_extension.base, NULL };
   drmModeResPtr drm_resources = NULL;
   drmModeConnectorPtr drm_connector = NULL;
   drmModeEncoderPtr drm_encoder = NULL;
   drmModeCrtcPtr drm_crtc = NULL;
   struct drm_surface *drm_win = NULL;
-  struct drm_bo *drm_bo = NULL;
-  unsigned int drm_fb_id = 0;
+  struct gbm_bo *drm_bo = NULL;
+  uint32_t drm_fb_id = 0;
   drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
   int drm_keyboard = -1;
   struct libevdev *drm_evdev = NULL;
   struct input_event drm_event;
   #endif
+  #if defined(EGL_RPI)
+  DISPMANX_DISPLAY_HANDLE_T rpi_dpy = DISPMANX_NO_HANDLE;
+  DISPMANX_MODEINFO_T rpi_info;
+  DISPMANX_UPDATE_HANDLE_T rpi_update = DISPMANX_NO_HANDLE;
+  DISPMANX_ELEMENT_HANDLE_T rpi_element = DISPMANX_NO_HANDLE;
+  VC_RECT_T rpi_dst_rect;
+  VC_RECT_T rpi_src_rect;
+  EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
+  struct termios *rpi_termios = NULL, rpi_termios_new;
+  int rpi_fdflags = -1;
+  unsigned char rpi_event;
+  #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
-  EGLint egl_config_attr[5];
+  EGLint egl_config_attr[16];
   EGLint egl_nconfigs = 0;
   EGLConfig *egl_configs = NULL, egl_config = NULL;
   EGLint egl_ctx_attr[3];
@@ -707,6 +791,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   strcat(backends, "egl-drm ");
+  #endif
+  #if defined(EGL_RPI)
+  strcat(backends, "egl-rpi ");
   #endif
 
   while ((opt = getopt(argc, argv, "b:e:h")) != -1) {
@@ -886,36 +973,43 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    drm_dpy = calloc(1, sizeof(struct drm_display));
-    if (!drm_dpy) {
-      printf("drm_display calloc failed: %s\n", strerror(errno));
-      goto out;
+    if (getenv("DRICARD")) {
+      drm_fd = open(getenv("DRICARD"), O_RDWR);
+      if (drm_fd == -1) {
+        printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
+        goto out;
+      }
     }
     else {
-      if (getenv("DRICARD")) {
-        drm_dpy->fd = open(getenv("DRICARD"), O_RDWR);
-        if (drm_dpy->fd == -1) {
-          printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
-          goto out;
-        }
+      drm_fd = open("/dev/dri/card0", O_RDWR);
+      if (drm_fd == -1) {
+        printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
+        goto out;
       }
-      else {
-        drm_dpy->fd = open("/dev/dri/card0", O_RDWR);
-        if (drm_dpy->fd == -1) {
-          printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
-          goto out;
-        }
+    }
+
+    if (getenv("NO_GBM")) {
+      drm_dpy = calloc(1, sizeof(struct drm_display));
+      if (!drm_dpy) {
+        printf("drm_display calloc failed: %s\n", strerror(errno));
+        goto out;
       }
 
+      drm_dpy->fd = drm_fd;
       drm_dpy->name = "drm";
-      if (getenv("DRIDRIVER")) {
-        drm_dpy->driver_name = getenv("DRIDRIVER");
+      if (getenv("DRI_DRIVER")) {
+        drm_dpy->driver_name = getenv("DRI_DRIVER");
       }
       else {
+        #if DRI_MAJOR_VERSION > 10 || (DRI_MAJOR_VERSION == 10 && DRI_MINOR_VERSION >= 3)
         drm_dpy->driver_name = "kms_swrast";
+        #else
+        printf("DRI_DRIVER is not set\n");
+        goto out;
+        #endif
       }
 
-      sprintf(drm_driver_path, "%s/%s_dri.so", DRIDRIVERDIR, drm_dpy->driver_name);
+      sprintf(drm_driver_path, "%s/%s_dri.so", DRI_DRIVERDIR, drm_dpy->driver_name);
       drm_dpy->driver = dlopen(drm_driver_path, RTLD_LAZY);
       if (!drm_dpy->driver) {
         printf("%s DRI driver not found\n", drm_dpy->driver_name);
@@ -930,7 +1024,7 @@ int main(int argc, char *argv[])
 
       drm_dpy->core = drm_driver_extensions[0];
       drm_dpy->dri2 = (struct __DRIdri2ExtensionRec *)drm_driver_extensions[2];
-      drm_dpy->screen = drm_dpy->dri2->createNewScreen2(0, drm_dpy->fd, drm_extensions, NULL, (const struct __DRIconfigRec ***)&drm_dpy->driver_configs, NULL);
+      drm_dpy->screen = drm_dpy->dri2->createNewScreen2(0, drm_dpy->fd, drm_extensions, NULL, &drm_dpy->driver_configs, NULL);
       if (!drm_dpy->screen) {
         printf("DRI createNewScreen2 failed\n");
         goto out;
@@ -941,26 +1035,39 @@ int main(int argc, char *argv[])
       drm_dpy->bo_create = drm_bo_create;
       drm_dpy->bo_destroy = drm_bo_destroy;
     }
+    else {
+      drm_dpy = gbm_create_device(drm_fd);
+      if (!drm_dpy) {
+        printf("gbm_create_device failed\n");
+        goto out;
+      }
+    }
 
-    drm_resources = drmModeGetResources(drm_dpy->fd);
+    drm_resources = drmModeGetResources(drm_fd);
     if (!drm_resources) {
       printf("drmModeGetResources failed\n");
       goto out;
     }
 
-    drm_connector = drmModeGetConnector(drm_dpy->fd, drm_resources->connectors[0]);
+    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[0]);
     if (!drm_connector) {
       printf("drmModeGetConnector failed\n");
       goto out;
     }
 
-    drm_encoder = drmModeGetEncoder(drm_dpy->fd, drm_resources->encoders[0]);
-    if (!drm_encoder) {
-      printf("drmModeGetEncoder failed\n");
-      goto out;
+    for (opt = 0; opt < drm_resources->count_encoders; opt++) {
+      drm_encoder = drmModeGetEncoder(drm_fd, drm_resources->encoders[opt]);
+      if (!drm_encoder) {
+        printf("drmModeGetEncoder failed\n");
+        goto out;
+      }
+      else if (drm_encoder->encoder_id == drm_connector->encoder_id) {
+        break;
+      }
+      drmModeFreeEncoder(drm_encoder);
     }
 
-    drm_crtc = drmModeGetCrtc(drm_dpy->fd, drm_encoder->crtc_id);
+    drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
     if (!drm_crtc) {
       printf("drmModeGetCrtc failed\n");
       goto out;
@@ -968,6 +1075,27 @@ int main(int argc, char *argv[])
 
     win_width = drm_connector->modes[0].hdisplay;
     win_height = drm_connector->modes[0].vdisplay;
+  }
+  #endif
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    bcm_host_init();
+
+    rpi_dpy = vc_dispmanx_display_open(DISPMANX_ID_MAIN_LCD);
+    if (rpi_dpy == DISPMANX_NO_HANDLE) {
+      printf("vc_dispmanx_element_add failed\n");
+      goto out;
+    }
+
+    memset(&rpi_info, 0, sizeof(DISPMANX_MODEINFO_T));
+    err = vc_dispmanx_display_get_info(rpi_dpy, &rpi_info);
+    if (err == -1) {
+      printf("vc_dispmanx_display_get_info failed\n");
+      goto out;
+    }
+
+    win_width = rpi_info.width;
+    win_height = rpi_info.height;
   }
   #endif
 
@@ -1017,8 +1145,13 @@ int main(int argc, char *argv[])
     egl_dpy = eglGetDisplay((EGLNativeDisplayType)drm_dpy);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    egl_dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  }
+  #endif
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (!egl_dpy) {
       printf("eglGetDisplay failed: 0x%x\n", eglGetError());
       goto out;
@@ -1073,8 +1206,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     err = eglInitialize(egl_dpy, &egl_major_version, &egl_minor_version);
     if (!err) {
       printf("eglInitialize failed: 0x%x\n", eglGetError());
@@ -1089,18 +1222,25 @@ int main(int argc, char *argv[])
       }
     }
 
-    egl_config_attr[0] = EGL_DEPTH_SIZE;
-    egl_config_attr[1] = 1;
-    egl_config_attr[2] = EGL_RENDERABLE_TYPE;
-    egl_config_attr[3] = EGL_OPENGL_BIT;
-    egl_config_attr[4] = EGL_NONE;
+    opt = 0;
+    egl_config_attr[opt++] = EGL_RED_SIZE;
+    egl_config_attr[opt++] = 1;
+    egl_config_attr[opt++] = EGL_GREEN_SIZE;
+    egl_config_attr[opt++] = 1;
+    egl_config_attr[opt++] = EGL_BLUE_SIZE;
+    egl_config_attr[opt++] = 1;
+    egl_config_attr[opt++] = EGL_DEPTH_SIZE;
+    egl_config_attr[opt++] = 1;
+    egl_config_attr[opt++] = EGL_RENDERABLE_TYPE;
+    egl_config_attr[opt++] = !gears_engine_version(gears_engine) ? EGL_OPENGL_BIT : gears_engine_version(gears_engine) == 1 ? EGL_OPENGL_ES_BIT : EGL_OPENGL_ES2_BIT;
+    egl_config_attr[opt] = EGL_NONE;
     err = eglChooseConfig(egl_dpy, egl_config_attr, NULL, 0, &egl_nconfigs);
     if (!err || !egl_nconfigs) {
       printf("eglChooseConfig failed: 0x%x, %d\n", eglGetError(), egl_nconfigs);
       goto out;
     }
 
-    egl_configs = malloc(egl_nconfigs * sizeof(EGLConfig));
+    egl_configs = calloc(egl_nconfigs, sizeof(EGLConfig));
     if (!egl_configs) {
       printf("malloc failed: %s\n", strerror(errno));
       goto out;
@@ -1127,6 +1267,8 @@ int main(int argc, char *argv[])
     }
 
     XMapWindow(x11_dpy, x11_win);
+
+    XMoveWindow(x11_dpy, x11_win, win_posx, win_posy);
 
     x11_event_mask = ExposureMask;
     XSelectInput(x11_dpy, x11_win, x11_event_mask);
@@ -1155,18 +1297,17 @@ int main(int argc, char *argv[])
   }
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
-  if (!strcmp(backend, "gl-fbdev")) {
+  if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
     fb_win = calloc(1, sizeof(struct fb_window));
     if (!fb_win) {
       printf("fb_window calloc failed: %s\n", strerror(errno));
       goto out;
     }
-    else {
-      fb_win->width = win_width;
-      fb_win->height = win_height;
-      fb_win->posx = win_posx;
-      fb_win->posy = win_posy;
-    }
+
+    fb_win->width = win_width;
+    fb_win->height = win_height;
+    fb_win->posx = win_posx;
+    fb_win->posy = win_posy;
   }
   #endif
   #if defined(EGL_WAYLAND)
@@ -1182,11 +1323,10 @@ int main(int argc, char *argv[])
       printf("wl_window calloc failed: %s\n", strerror(errno));
       goto out;
     }
-    else {
-      wl_win->surface = wl_surface;
-      wl_win->width = win_width;
-      wl_win->height = win_height;
-    }
+
+    wl_win->surface = wl_surface;
+    wl_win->width = win_width;
+    wl_win->height = win_height;
 
     wl_shell_surface = wl_shell_get_shell_surface(wl_data.wl_shell, wl_surface);
     if (!wl_shell_surface) {
@@ -1203,15 +1343,64 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    drm_win = calloc(1, sizeof(struct drm_surface));
-    if (!drm_win) {
-      printf("drm_surface calloc failed: %s\n", strerror(errno));
-      goto out;
-    }
-    else {
+    if (getenv("NO_GBM")) {
+      drm_win = calloc(1, sizeof(struct drm_surface));
+      if (!drm_win) {
+        printf("drm_surface calloc failed: %s\n", strerror(errno));
+        goto out;
+      }
+
       drm_win->display = drm_dpy;
       drm_win->width = win_width;
       drm_win->height = win_height;
+    }
+    else {
+      drm_win = gbm_surface_create(drm_dpy, win_width, win_height, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+      if (!drm_win) {
+        printf("gbm_surface_create failed\n");
+        goto out;
+      }
+    }
+  }
+  #endif
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    rpi_update = vc_dispmanx_update_start(0);
+    if (rpi_update == DISPMANX_NO_HANDLE) {
+      printf("vc_dispmanx_update_start failed\n");
+      goto out;
+    }
+
+    rpi_dst_rect.x = win_posx;
+    rpi_dst_rect.y = win_posy;
+    rpi_dst_rect.width = win_width;
+    rpi_dst_rect.height = win_height;
+
+    rpi_src_rect.x = 0;
+    rpi_src_rect.y = 0;
+    rpi_src_rect.width  = win_width << 16;
+    rpi_src_rect.height = win_height << 16;
+
+    rpi_element = vc_dispmanx_element_add(rpi_update, rpi_dpy,  0, &rpi_dst_rect, DISPMANX_NO_HANDLE, &rpi_src_rect, DISPMANX_PROTECTION_NONE, NULL, NULL, DISPMANX_NO_ROTATE);
+    if (rpi_element == DISPMANX_NO_HANDLE) {
+      printf("vc_dispmanx_element_add failed\n");
+      goto out;
+    }
+
+    rpi_win = calloc(1, sizeof(EGL_DISPMANX_WINDOW_T));
+    if (!rpi_win) {
+      printf("EGL_DISPMANX_WINDOW_T calloc failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    rpi_win->element = rpi_element;
+    rpi_win->width = win_width;
+    rpi_win->height = win_height;
+
+    err = vc_dispmanx_update_submit_sync(rpi_update);
+    if (err == -1) {
+      printf("vc_dispmanx_update_submit_sync failed\n");
+      goto out;
     }
   }
   #endif
@@ -1241,8 +1430,13 @@ int main(int argc, char *argv[])
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)rpi_win, NULL);
+  }
+  #endif
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (!egl_win) {
       printf("eglCreateWindowSurface failed: 0x%x\n", eglGetError());
       goto out;
@@ -1300,8 +1494,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     opt = 0;
     memset(egl_ctx_attr, 0, sizeof(egl_ctx_attr));
     if (gears_engine_version(gears_engine) == 2) {
@@ -1412,6 +1606,42 @@ int main(int argc, char *argv[])
     }
   }
   #endif
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    rpi_termios = calloc(1, sizeof(struct termios));
+    if (!rpi_termios) {
+      printf("rpi_termios calloc failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    err = tcgetattr(STDIN_FILENO, rpi_termios);
+    if (err == -1) {
+      printf("tcgetattr failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    memcpy(&rpi_termios_new, rpi_termios, sizeof(struct termios));
+    rpi_termios_new.c_lflag &= ~(ICANON | ECHO);
+
+    err = tcsetattr(STDIN_FILENO, TCSANOW, &rpi_termios_new);
+    if (err == -1) {
+      printf("tcsetattr failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    rpi_fdflags = fcntl(STDIN_FILENO, F_GETFL);
+    if (rpi_fdflags == -1) {
+      printf("fcntl F_GETFL failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    err = fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags | O_NONBLOCK);
+    if (err == -1) {
+      printf("fcntl F_SETFL failed: %s\n", strerror(errno));
+      goto out;
+    }
+  }
+  #endif
 
   /* drawing (main event loop) */
 
@@ -1480,8 +1710,8 @@ int main(int argc, char *argv[])
       }
       #endif
 
-      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
         eglSwapBuffers(egl_dpy, egl_win);
       }
       #endif
@@ -1493,6 +1723,7 @@ int main(int argc, char *argv[])
         redisplay = 0;
       }
 
+      memset(&x11_event, 0, sizeof(XEvent));
       if (XPending(x11_dpy)) {
         XNextEvent(x11_dpy, &x11_event);
         if (x11_event.type == Expose && !redisplay) {
@@ -1510,6 +1741,7 @@ int main(int argc, char *argv[])
         redisplay = 0;
       }
 
+      memset(&dfb_event, 0, sizeof(DFBWindowEvent));
       if (!dfb_event_buffer->GetEvent(dfb_event_buffer, (DFBEvent *)&dfb_event)) {
         if (dfb_event.type == DWET_KEYDOWN) {
           dfb_keyboard_handle_key(&dfb_event);
@@ -1523,8 +1755,8 @@ int main(int argc, char *argv[])
         redisplay = 0;
       }
 
-      read(fb_keyboard, &fb_event, sizeof(struct input_event));
-      if (fb_event.type == EV_KEY) {
+      memset(&fb_event, 0, sizeof(struct input_event));
+      if (read(fb_keyboard, &fb_event, sizeof(struct input_event)) > 0 && fb_event.type == EV_KEY) {
         if (fb_event.value) {
           fb_keyboard_handle_key(&fb_event);
         }
@@ -1544,28 +1776,58 @@ int main(int argc, char *argv[])
     if (!strcmp(backend, "egl-drm")) {
       if (redisplay) {
         if (drm_bo) {
-          drm_dpy->surface_release_buffer(drm_win, drm_bo);
-        }
-        drm_bo = drm_dpy->surface_lock_front_buffer(drm_win);
-        if (drm_bo) {
-          drm_fb_id = (unsigned int)drm_bo->user_data;
-          if(!drm_fb_id) {
-            drmModeAddFB(drm_dpy->fd, win_width, win_height, 24, 32, win_width * 4, drm_bo->handle, &drm_fb_id);
-            drm_bo->user_data = (void *)drm_fb_id;
-            drm_bo->destroy_user_data = drm_destroy_user_data;
+          if (getenv("NO_GBM")) {
+            drm_dpy->surface_release_buffer(drm_win, drm_bo);
           }
-          drmModePageFlip(drm_dpy->fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
-          drmHandleEvent(drm_dpy->fd, &drm_context);
+          else {
+            gbm_surface_release_buffer(drm_win, drm_bo);
+          }
+        }
+        if (getenv("NO_GBM")) {
+          drm_bo = drm_dpy->surface_lock_front_buffer(drm_win);
+        }
+        else {
+          drm_bo = gbm_surface_lock_front_buffer(drm_win);
+        }
+        if (drm_bo) {
+          drm_fb_id = getenv("NO_GBM") ? (uintptr_t)drm_bo->user_data : (uintptr_t)gbm_bo_get_user_data(drm_bo);
+          if(!drm_fb_id) {
+            drmModeAddFB(drm_fd, win_width, win_height, 24, 32, getenv("NO_GBM") ? drm_bo->stride : gbm_bo_get_stride(drm_bo), getenv("NO_GBM") ? drm_bo->handle : gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
+            drmModeSetCrtc(drm_fd, drm_encoder->crtc_id, drm_fb_id, 0, 0, &drm_connector->connector_id, 1, &drm_connector->modes[0]);
+            if (getenv("NO_GBM")) {
+              drm_bo->user_data = (void *)(uintptr_t)drm_fb_id;
+              drm_bo->destroy_user_data = drm_destroy_user_data;
+            }
+            else {
+              gbm_bo_set_user_data(drm_bo, (void *)(uintptr_t)drm_fb_id, gbm_destroy_user_data);
+            }
+          }
+          drmModePageFlip(drm_fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+          drmHandleEvent(drm_fd, &drm_context);
         }
         if (!animate) {
           redisplay = 0;
         }
       }
 
-      libevdev_next_event(drm_evdev, LIBEVDEV_READ_FLAG_NORMAL, &drm_event);
-      if (drm_event.type == EV_KEY) {
+      memset(&drm_event, 0, sizeof(struct input_event));
+      if (!libevdev_next_event(drm_evdev, LIBEVDEV_READ_FLAG_NORMAL, &drm_event) && drm_event.type == EV_KEY) {
         if (drm_event.value) {
           drm_keyboard_handle_key(&drm_event);
+        }
+      }
+    }
+    #endif
+    #if defined(EGL_RPI)
+    if (!strcmp(backend, "egl-rpi")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
+      rpi_event = 0;
+      if (read(STDIN_FILENO, &rpi_event, sizeof(unsigned char)) > 0) {
+        if (rpi_event) {
+          rpi_keyboard_handle_key(rpi_event);
         }
       }
     }
@@ -1601,8 +1863,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_DEPTH_SIZE, &egl_depth_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_RED_SIZE, &egl_red_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_GREEN_SIZE, &egl_green_size);
@@ -1665,11 +1927,23 @@ out:
     }
   }
   #endif
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    if (rpi_fdflags != -1) {
+      fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags);
+    }
+
+    if (rpi_termios) {
+      tcsetattr(STDIN_FILENO, TCSANOW, rpi_termios);
+      free(rpi_termios);
+    }
+  }
+  #endif
 
   /* destroy context */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_ctx) {
       eglMakeCurrent(egl_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       eglDestroyContext(egl_dpy, egl_ctx);
@@ -1704,8 +1978,8 @@ out:
 
   /* destroy window and close display */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_win) {
       eglDestroySurface(egl_dpy, egl_win);
     }
@@ -1834,11 +2108,16 @@ out:
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     if (drm_win) {
-      free(drm_win);
+      if (getenv("NO_GBM")) {
+        free(drm_win);
+      }
+      else {
+        gbm_surface_destroy(drm_win);
+      }
     }
 
     if (drm_crtc) {
-      drmModeSetCrtc(drm_dpy->fd, drm_crtc->crtc_id, drm_crtc->buffer_id, drm_crtc->x, drm_crtc->y, &drm_connector->connector_id, 1, &drm_crtc->mode);
+      drmModeSetCrtc(drm_fd, drm_crtc->crtc_id, drm_crtc->buffer_id, drm_crtc->x, drm_crtc->y, &drm_connector->connector_id, 1, &drm_crtc->mode);
       drmModeFreeCrtc(drm_crtc);
     }
 
@@ -1855,24 +2134,49 @@ out:
     }
 
     if (drm_dpy) {
-      if (!drm_dpy->screen) {
-        for (opt = 0; drm_dpy->driver_configs[opt]; opt++)
-          free(drm_dpy->driver_configs[opt]);
-        free(drm_dpy->driver_configs);
+      if (getenv("NO_GBM")) {
+        if (!drm_dpy->screen) {
+          for (opt = 0; drm_dpy->driver_configs[opt]; opt++)
+            free(drm_dpy->driver_configs[opt]);
+          free(drm_dpy->driver_configs);
 
-        drm_dpy->core->destroyScreen(drm_dpy->screen);
+          drm_dpy->core->destroyScreen(drm_dpy->screen);
+        }
+
+        if (!drm_dpy->driver) {
+          dlclose(drm_dpy->driver);
+        }
+
+        free(drm_dpy);
       }
-
-      if (!drm_dpy->driver) {
-        dlclose(drm_dpy->driver);
+      else {
+        gbm_device_destroy(drm_dpy);
       }
-
-      if (drm_dpy->fd != -1) {
-        close(drm_dpy->fd);
-      }
-
-      free(drm_dpy);
     }
+
+    if (drm_fd != -1) {
+      close(drm_fd);
+    }
+  }
+  #endif
+  #if defined(EGL_RPI)
+  if (!strcmp(backend, "egl-rpi")) {
+    if (rpi_element != DISPMANX_NO_HANDLE) {
+      if ((rpi_update = vc_dispmanx_update_start(0)) != DISPMANX_NO_HANDLE) {
+        vc_dispmanx_element_remove(rpi_update, rpi_element);
+        vc_dispmanx_update_submit_sync(rpi_update);
+      }
+    }
+
+    if (rpi_win) {
+      free(rpi_win);
+    }
+
+    if (rpi_dpy != DISPMANX_NO_HANDLE) {
+      vc_dispmanx_display_close(rpi_dpy);
+    }
+
+    bcm_host_deinit();
   }
   #endif
 

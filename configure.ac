@@ -1,4 +1,4 @@
-AC_INIT(yagears, 0.9)
+AC_INIT(yagears, 1.0)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -9,7 +9,7 @@ LT_INIT
 AC_PROG_CC
 AC_PROG_CXX
 
-AM_PROG_CC_C_O
+AC_SYS_LARGEFILE
 
 PKG_PROG_PKG_CONFIG
 
@@ -36,7 +36,9 @@ if test x$enable_gl = xyes; then
       GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGL_GLEXT_PROTOTYPES"
     fi
   fi
-else
+fi
+
+if test x$enable_gl = xno; then
   if test x$enable_glesv1_cm = xyes; then
     PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, , enable_glesv1_cm=no)
     if test x$enable_glesv1_cm = xyes; then
@@ -83,15 +85,21 @@ AC_ARG_ENABLE(egl-wayland,
 AC_ARG_ENABLE(egl-drm,
               AS_HELP_STRING(--disable-egl-drm, disable DRM EGL rendering backend),
               enable_egl_drm=no, enable_egl_drm=yes)
+AC_ARG_ENABLE(egl-rpi,
+              AS_HELP_STRING(--disable-egl-rpi, disable Raspberry Pi Dispmanx EGL rendering backend),
+              enable_egl_rpi=no, enable_egl_rpi=yes)
 
 if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
     save_LIBS=$LIBS
     LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
-    AC_CHECK_LIB(GL, glXCreateContext,
-                 AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib) X11_LIBS=-lX11,
-                 enable_gl_x11=no)
+    AC_CHECK_LIB(GL, glXCreateContext, , enable_gl_x11=no)
     LIBS=$save_LIBS
+    if test x$enable_gl_x11 = xyes; then
+      PKG_CHECK_MODULES(X11, x11,
+                        AC_DEFINE(GL_X11, 1, Support for OpenGL Extension to Xlib),
+                        enable_gl_x11=no)
+    fi
   fi
 
   if test x$enable_gl_directfb = xyes; then
@@ -123,13 +131,17 @@ else
 fi
 
 if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$enable_egl_fbdev = xyes ||
-   test x$enable_egl_wayland = xyes || test x$enable_egl_drm; then
+   test x$enable_egl_wayland = xyes || test x$enable_egl_drm || test x$enable_egl_rpi; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
     if test x$enable_egl_x11 = xyes; then
-      PKG_CHECK_MODULES(X11, x11,
-                        AC_DEFINE(EGL_X11, 1, Support for EGL with Xlib platform),
-                        enable_egl_x11=no)
+      if test x$enable_gl_x11 = xyes; then
+        AC_DEFINE(EGL_X11, 1, Support for EGL with Xlib platform)
+      else
+        PKG_CHECK_MODULES(X11, x11,
+                          AC_DEFINE(EGL_X11, 1, Support for EGL with Xlib platform),
+                          enable_egl_x11=no)
+      fi
     fi
     if test x$enable_egl_directfb = xyes; then
       if test x$enable_gl_directfb = xyes; then
@@ -159,21 +171,18 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
       fi
     fi
     if test x$enable_egl_drm = xyes; then
-      AC_MSG_CHECKING(for DRI driver)
-      DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri 2> /dev/null`
-      if test -d $DRIDRIVERDIR; then
-        AC_MSG_RESULT(yes)
-        PKG_CHECK_MODULES(DRM, libdrm libevdev,
-                          AC_DEFINE(EGL_DRM, 1, Support for EGL with DRM platform),
-                          enable_egl_drm=no)
-        if test x$enable_egl_drm = xyes; then
-          DRM_CFLAGS="$DRM_CFLAGS -D_FILE_OFFSET_BITS=64 -DDRIDRIVERDIR=\\\"$DRIDRIVERDIR\\\""
-          DRM_LIBS="$DRM_LIBS -ldl"
-        fi
-      else
-        AC_MSG_RESULT(no)
-        enable_egl_drm=no
+      PKG_CHECK_MODULES(DRM, gbm libdrm libevdev,
+                        AC_DEFINE(EGL_DRM, 1, Support for EGL with DRM platform),
+                        enable_egl_drm=no)
+      if test x$enable_egl_drm = xyes; then
+        DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"`$PKG_CONFIG --variable=dridriverdir dri`\\\" -DDRI_MAJOR_VERSION=`$PKG_CONFIG --modversion dri | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'` -DDRI_MINOR_VERSION=`$PKG_CONFIG --modversion dri | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`"
+        DRM_LIBS="$DRM_LIBS -ldl"
       fi
+    fi
+    if test x$enable_egl_rpi = xyes; then
+      PKG_CHECK_MODULES(RPI, bcm_host,
+                        AC_DEFINE(EGL_RPI, 1, Support for EGL with Raspberry Pi Dispmanx platform),
+                        enable_egl_rpi=no)
     fi
   else
     enable_egl_x11=no
@@ -181,12 +190,13 @@ if test x$enable_egl_x11 = xyes || test x$enable_egl_directfb = xyes || test x$e
     enable_egl_fbdev=no
     enable_egl_wayland=no
     enable_egl_drm=no
+    enable_egl_rpi=no
   fi
 fi
 
 if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a \
         x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a \
-        x$enable_egl_wayland = xno -a x$enable_egl_drm = xno; then
+        x$enable_egl_wayland = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno; then
   AC_MSG_ERROR(No rendering backends found)
 fi
 
@@ -196,6 +206,9 @@ AC_ARG_ENABLE(efl,
 AC_ARG_ENABLE(fltk,
               AS_HELP_STRING(--disable-fltk, disable FLTK GUI toolkit),
               enable_fltk=no, enable_fltk=yes)
+AC_ARG_ENABLE(glfw,
+              AS_HELP_STRING(--disable-glfw, disable GLFW GUI toolkit),
+              enable_glfw=no, enable_glfw=yes)
 AC_ARG_ENABLE(glut,
               AS_HELP_STRING(--disable-glut, disable GLUT GUI toolkit),
               enable_glut=no, enable_glut=yes)
@@ -232,23 +245,37 @@ if test x$enable_fltk = xyes; then
   fi
 fi
 
+if test x$enable_glfw = xyes; then
+  PKG_CHECK_MODULES(GLFW, glfw3, AC_DEFINE(GLFW, 1, Support for GLFW graphical user interface), enable_glfw=no)
+fi
+
 if test x$enable_glut = xyes; then
-  PKG_CHECK_MODULES(GLUT, glut, AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface), enable_glut=no)
+  PKG_CHECK_MODULES(GLUT, glut, , enable_glut=no)
   if test x$enable_glut = xno; then
     AC_CHECK_LIB(glut, glutCreateWindow, enable_glut=yes, enable_glut=no)
-    if test x$enable_glut = xyes; then
-      AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface)
-      GLUT_LIBS=-lglut
-    fi
+  fi
+  if test x$enable_glut = xyes; then
+    GLUT_LIBS=-lglut
+    AC_DEFINE(GLUT, 1, Support for GLUT graphical user interface)
   fi
 fi
 
 if test x$enable_gtk = xyes; then
-  PKG_CHECK_MODULES(GTK, gtk+-3.0 >= 3.16.0, enable_gtk=yes, enable_gtk=no)
+  AC_MSG_CHECKING(for GTK+ version)
+  AC_ARG_WITH(gtk,
+              AS_HELP_STRING(--with-gtk=2|3, GTK+ GUI toolkit version (default: 2)),
+              [case "$with_gtk" in 2|3) ;; *) AC_MSG_ERROR([invalid GTK+ GUI toolkit version]) ;; esac],
+              with_gtk=2)
+  AC_MSG_RESULT([$with_gtk])
+  if test x$with_gtk = x2; then
+    PKG_CHECK_MODULES(GTK, gtkgl-2.0, , enable_gtk=no)
+  else
+    enable_gtk=no
+  fi
   if test x$enable_gtk = xno; then
     PKG_CHECK_MODULES(GTK, gtkgl-3.0, enable_gtk=yes, enable_gtk=no)
     if test x$enable_gtk = xno; then
-      PKG_CHECK_MODULES(GTK, gtkgl-2.0, enable_gtk=yes, enable_gtk=no)
+      PKG_CHECK_MODULES(GTK, gtk+-3.0 >= 3.16.0, enable_gtk=yes, enable_gtk=no)
     fi
   fi
   if test x$enable_gtk = xyes; then
@@ -257,13 +284,39 @@ if test x$enable_gtk = xyes; then
 fi
 
 if test x$enable_qt = xyes; then
-  PKG_CHECK_MODULES(QT, QtGui QtOpenGL, AC_DEFINE(QT, 1, Support for Qt graphical user interface), enable_qt=no)
+  AC_MSG_CHECKING(for Qt version)
+  AC_ARG_WITH(qt,
+              AS_HELP_STRING(--with-qt=4|5, Qt GUI toolkit version (default: 4)),
+              [case "$with_qt" in 4|5) ;; *) AC_MSG_ERROR([invalid Qt GUI toolkit version]) ;; esac],
+              with_qt=4)
+  AC_MSG_RESULT([$with_qt])
+  if test x$with_qt = x4; then
+    PKG_CHECK_MODULES(QT, QtOpenGL, , enable_qt=no)
+  else
+    enable_qt=no
+  fi
+  if test x$enable_qt = xno; then
+    PKG_CHECK_MODULES(QT, Qt5OpenGL, enable_qt=yes, enable_qt=no)
+  fi
+  if test x$enable_qt = xyes; then
+    AC_DEFINE(QT, 1, Support for Qt graphical user interface)
+  fi
 fi
 
 if test x$enable_sdl = xyes; then
-  PKG_CHECK_MODULES(SDL, sdl2, enable_sdl=yes, enable_sdl=no)
+  AC_MSG_CHECKING(for SDL version)
+  AC_ARG_WITH(sdl,
+              AS_HELP_STRING(--with-sdl=1|2, SDL GUI toolkit version (default: 1)),
+              [case "$with_sdl" in 1|2) ;; *) AC_MSG_ERROR([invalid SDL GUI toolkit version]) ;; esac],
+              with_sdl=1)
+  AC_MSG_RESULT([$with_sdl])
+  if test x$with_sdl = x1; then
+    PKG_CHECK_MODULES(SDL, sdl, , enable_sdl=no)
+  else
+    enable_sdl=no
+  fi
   if test x$enable_sdl = xno; then
-    PKG_CHECK_MODULES(SDL, sdl, enable_sdl=yes, enable_sdl=no)
+    PKG_CHECK_MODULES(SDL, sdl2, enable_sdl=yes, enable_sdl=no)
   fi
   if test x$enable_sdl = xyes; then
     AC_DEFINE(SDL, 1, Support for SDL graphical user interface)
@@ -287,13 +340,14 @@ if test x$enable_wx = xyes; then
   fi
 fi
 
-if test x$enable_efl = xno -a x$enable_fltk = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$enable_qt = xno -a x$enable_sdl = xno -a x$enable_sfml = xno -a x$enable_wx = xno; then
+if test x$enable_efl = xno -a x$enable_fltk = xno -a x$enable_glfw = xno -a x$enable_glut = xno -a x$enable_gtk = xno -a x$enable_qt = xno -a x$enable_sdl = xno -a x$enable_sfml = xno -a x$enable_wx = xno; then
   AC_MSG_WARN(No graphical user interface toolkits found)
 fi
 
 AM_CONDITIONAL(HAVE_GLUT, test x$enable_glut = xyes)
 AM_CONDITIONAL(HAVE_GUI, test x$enable_efl = xyes ||
                          test x$enable_fltk = xyes ||
+                         test x$enable_glfw = xyes ||
                          test x$enable_glut = xyes ||
                          test x$enable_gtk = xyes ||
                          test x$enable_qt = xyes ||
@@ -332,6 +386,7 @@ echo "  EGL with DirectFB platform       $enable_egl_directfb"
 echo "  EGL with Linux FBDev platform    $enable_egl_fbdev"
 echo "  EGL with Wayland platform        $enable_egl_wayland"
 echo "  EGL with DRM platform            $enable_egl_drm"
+echo "  EGL with RPi Dispmanx platform   $enable_egl_rpi"
 echo
 
 echo
@@ -339,6 +394,7 @@ echo "Toolkits:"
 echo
 echo "  EFL                              $enable_efl"
 echo "  FLTK                             $enable_fltk"
+echo "  GLFW                             $enable_glfw"
 echo "  GLUT                             $enable_glut"
 echo "  GTK                              $enable_gtk"
 echo "  QT                               $enable_qt"

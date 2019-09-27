@@ -22,9 +22,9 @@ libyagears_la_LIBADD = @GL_LIBS@ @GLESV1_CM_LIBS@ @GLESV2_LIBS@ @PNG_LIBS@ @TIFF
 
 bin_PROGRAMS = yagears
 yagears_SOURCES = main.c
-yagears_CFLAGS = @EGL_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_CFLAGS@ @DRM_CFLAGS@
+yagears_CFLAGS = @EGL_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_CFLAGS@ @DRM_CFLAGS@ @RPI_CFLAGS@
 yagears_LDFLAGS = -Wl,--whole-archive,.libs/libyagears.a,--no-whole-archive
-yagears_LDADD = libyagears.la @EGL_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_LIBS@ @DRM_LIBS@
+yagears_LDADD = libyagears.la @EGL_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_LIBS@ @DRM_LIBS@ @RPI_LIBS@
 
 if HAVE_GLUT
 bin_PROGRAMS += yagears-mosaic
@@ -37,7 +37,7 @@ endif
 if HAVE_GUI
 bin_PROGRAMS += yagears-gui
 yagears_gui_SOURCES = gui.cc
-yagears_gui_CXXFLAGS = @EFL_CFLAGS@ @FLTK_CFLAGS@ @GLUT_CFLAGS@ @GTK_CFLAGS@ @QT_CFLAGS@ @SDL_CFLAGS@ @SFML_CFLAGS@ @WX_CFLAGS@
+yagears_gui_CXXFLAGS = @EFL_CFLAGS@ @FLTK_CFLAGS@ @GLFW_CFLAGS@ @GLUT_CFLAGS@ @GTK_CFLAGS@ @QT_CFLAGS@ @SDL_CFLAGS@ @SFML_CFLAGS@ @WX_CFLAGS@
 yagears_gui_LDFLAGS = -Wl,--whole-archive,.libs/libyagears.a,--no-whole-archive
-yagears_gui_LDADD = libyagears.la @EFL_LIBS@ @FLTK_LIBS@ @GLUT_LIBS@ @GTK_LIBS@ @QT_LIBS@ @SDL_LIBS@ @SFML_LIBS@ @WX_LIBS@
+yagears_gui_LDADD = libyagears.la @EFL_LIBS@ @FLTK_LIBS@ @GLFW_LIBS@ @GLUT_LIBS@ @GTK_LIBS@ @QT_LIBS@ @SDL_LIBS@ @SFML_LIBS@ @WX_LIBS@
 endif

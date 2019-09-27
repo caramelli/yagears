@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2017  Nicolas Caramelli
+  Copyright (C) 2013-2019  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -21,14 +21,14 @@
   THE SOFTWARE.
 */
 
+#include "config.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/time.h>
-
-#include "config.h"
 
 #if defined(EFL)
 #include <Elementary.h>
@@ -38,6 +38,9 @@
 #include <FL/Fl_Gl_Window.H>
 void fl_open_display();
 void fl_close_display();
+#endif
+#if defined(GLFW)
+#include <GLFW/glfw3.h>
 #endif
 #if defined(GLUT)
 #include <GL/glut.h>
@@ -58,7 +61,11 @@ void glutExit();
 #endif
 #if defined(QT)
 #include <QGLWidget>
+#if QT_VERSION >= QT_VERSION_CHECK(5,0,0)
+#include <QtWidgets>
+#else
 #include <QtGui>
+#endif
 #endif
 #if defined(SDL)
 #include <SDL.h>
@@ -138,38 +145,40 @@ static Eina_Bool ecore_animator(void *data)
 
 static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
 {
-  if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Escape")) {
-    ecore_animator_del((Ecore_Animator *)evas_object_data_get((Evas_Object *)widget, "animator"));
-    elm_exit();
-    return EINA_TRUE;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "space")) {
-    animate = !animate;
-    if (animate) {
-      elm_glview_changed_set((Evas_Object *)widget);
+  if (event) {
+    if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Escape")) {
+      ecore_animator_del((Ecore_Animator *)evas_object_data_get((Evas_Object *)widget, "animator"));
+      elm_exit();
+      return EINA_TRUE;
     }
-    return EINA_TRUE;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Next")) {
-    view_tz -= -5.0;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Prior")) {
-    view_tz += -5.0;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Down")) {
-    view_rx -= 5.0;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Up")) {
-    view_rx += 5.0;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Right")) {
-    view_ry -= 5.0;
-  }
-  else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Left")) {
-    view_ry += 5.0;
-  }
-  else {
-    return EINA_FALSE;
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "space")) {
+      animate = !animate;
+      if (animate) {
+        elm_glview_changed_set((Evas_Object *)widget);
+      }
+      return EINA_TRUE;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Next")) {
+      view_tz -= -5.0;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Prior")) {
+      view_tz += -5.0;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Down")) {
+      view_rx -= 5.0;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Up")) {
+      view_rx += 5.0;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Right")) {
+      view_ry -= 5.0;
+    }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Left")) {
+      view_ry += 5.0;
+    }
+    else {
+      return EINA_FALSE;
+    }
   }
 
   if (!animate) {
@@ -257,6 +266,70 @@ int handle(int event)
   return 1;
 }
 };
+#endif
+
+#if defined(GLFW)
+static void glfwDisplay(GLFWwindow *window)
+{
+  if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
+  gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
+  if (animate) frames++;
+  glfwSwapBuffers(window);
+}
+
+static void glfwIdle(GLFWwindow *window)
+{
+  if (animate) {
+    if (!frames) return;
+    glfwDisplay(window);
+  }
+  else {
+    if (frames) frames = 0;
+  }
+}
+
+static void glfwKeyCallback(GLFWwindow *window, int key, int scancode, int action, int mods)
+{
+  if (action != GLFW_PRESS)
+    return;
+
+  switch (key) {
+    case GLFW_KEY_ESCAPE:
+      glfwSetWindowShouldClose(window, GL_TRUE);
+      return;
+    case GLFW_KEY_SPACE:
+      animate = !animate;
+      if (animate) {
+        glfwDisplay(window);
+      }
+      return;
+    case GLFW_KEY_PAGE_DOWN:
+      view_tz -= -5.0;
+      break;
+    case GLFW_KEY_PAGE_UP:
+      view_tz += -5.0;
+      break;
+    case GLFW_KEY_DOWN:
+      view_rx -= 5.0;
+      break;
+    case GLFW_KEY_UP:
+      view_rx += 5.0;
+      break;
+    case GLFW_KEY_RIGHT:
+      view_ry -= 5.0;
+      break;
+    case GLFW_KEY_LEFT:
+      view_ry += 5.0;
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    glfwDisplay(window);
+  }
+
+}
 #endif
 
 #if defined(GLUT)
@@ -569,7 +642,7 @@ class SfRenderWindow : public sf::RenderWindow {
 public:
 int idle_id;
 
-SfRenderWindow() : RenderWindow(sf::VideoMode(win_width, win_height), "", sf::Style::Default, sf::ContextSettings(1))
+SfRenderWindow(const sf::String& title) : RenderWindow(sf::VideoMode(win_width, win_height), title, sf::Style::Default, sf::ContextSettings(1))
 {
   idle_id = 1;
 }
@@ -730,7 +803,7 @@ END_EVENT_TABLE()
 
 class WxFrame : public wxFrame {
 public:
-WxFrame() : wxFrame(NULL, wxID_ANY, wxEmptyString, wxPoint(win_posx, win_posy))
+WxFrame(const wxString& title) : wxFrame(NULL, wxID_ANY, title, wxPoint(win_posx, win_posy))
 {
   int wx_glconfig[] = { WX_GL_RGBA, WX_GL_DOUBLEBUFFER, WX_GL_DEPTH_SIZE, 1, 0 };
   WxGLCanvas *wx_glcanvas = new WxGLCanvas(this, wx_glconfig);
@@ -758,6 +831,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(FLTK)
   FlGlWindow *fltk_win;
+  #endif
+  #if defined(GLFW)
+  GLFWwindow *glfw_win;
   #endif
   #if defined(GLUT)
   int glut_win;
@@ -795,6 +871,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(FLTK)
   strcat(toolkits, "fltk ");
+  #endif
+  #if defined(GLFW)
+  strcat(toolkits, "glfw ");
   #endif
   #if defined(GLUT)
   strcat(toolkits, "glut ");
@@ -892,6 +971,16 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(GLFW)
+  if (!strcmp(toolkit, "glfw")) {
+    glfwInit();
+
+    const GLFWvidmode *glfw_mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+    win_width = glfw_mode->width;
+    win_height = glfw_mode->height;
+  }
+  #endif
+
   #if defined(GLUT)
   if (!strcmp(toolkit, "glut")) {
     glutInit(&argc, argv);
@@ -975,6 +1064,7 @@ int main(int argc, char *argv[])
   #if defined(EFL)
   if (!strcmp(toolkit, "efl")) {
     elm_win = elm_win_add(NULL, NULL, ELM_WIN_BASIC);
+    elm_win_title_set(elm_win, "yagears");
     Evas_Object *elm_glview = elm_glview_add(elm_win);
     elm_glview_mode_set(elm_glview, ELM_GLVIEW_DEPTH);
     elm_glview_render_func_set(elm_glview, elm_glview_render);
@@ -992,10 +1082,20 @@ int main(int argc, char *argv[])
   #if defined(FLTK)
   if (!strcmp(toolkit, "fltk")) {
     fltk_win = new FlGlWindow;
+    fltk_win->label("yagears");
     fltk_win->resize(win_posx, win_posy, win_width, win_height);
     fltk_win->show();
     while (!fltk_win->valid())
       Fl::check();
+  }
+  #endif
+
+  #if defined(GLFW)
+  if (!strcmp(toolkit, "glfw")) {
+    glfw_win = glfwCreateWindow(win_width, win_height, "yagears", NULL, NULL);
+    glfwSetWindowPos(glfw_win, win_posx, win_posy);
+    glfwSetKeyCallback(glfw_win, glfwKeyCallback);
+    glfwMakeContextCurrent(glfw_win);
   }
   #endif
 
@@ -1004,7 +1104,7 @@ int main(int argc, char *argv[])
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(win_width, win_height);
     glutInitWindowPosition(win_posx, win_posy);
-    glut_win = glutCreateWindow(NULL);
+    glut_win = glutCreateWindow("yagears");
     glutDisplayFunc(glutDisplay);
     glutIdleFunc(glutIdle);
     glutKeyboardFunc(glutKeyboard);
@@ -1015,6 +1115,7 @@ int main(int argc, char *argv[])
   #if defined(GTK)
   if (!strcmp(toolkit, "gtk")) {
     gtk_win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    gtk_window_set_title(GTK_WINDOW(gtk_win), "yagears");
     GtkWidget *gtk_glarea;
     #if GTK_CHECK_VERSION(3,16,0)
     gtk_glarea = gtk_gl_area_new();
@@ -1029,6 +1130,7 @@ int main(int argc, char *argv[])
     g_signal_connect(gtk_glarea, "expose-event", G_CALLBACK(gtk_render), NULL);
     #endif
     #endif
+    gtk_widget_set_size_request(gtk_glarea, win_width, win_height);
     gtk_container_add(GTK_CONTAINER(gtk_win), gtk_glarea);
     gtk_idle_id = g_idle_add(gtk_idle, gtk_glarea);
     g_signal_connect(gtk_win, "key-press-event", G_CALLBACK(gtk_key_press_event), &gtk_idle_id);
@@ -1042,7 +1144,8 @@ int main(int argc, char *argv[])
 
   #if defined(QT)
   if (!strcmp(toolkit, "qt")) {
-    qt_win = new QtGLWidget;
+    qt_win = new QtGLWidget();
+    qt_win->setWindowTitle("yagears");
     qt_win->resize(win_width, win_height);
     qt_win->move(win_posx, win_posy);
     qt_win->show();
@@ -1052,7 +1155,7 @@ int main(int argc, char *argv[])
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
     #if SDL_VERSION_ATLEAST(2, 0, 0)
-    sdl_win = SDL_CreateWindow(NULL, win_posx, win_posy, win_width, win_height, SDL_WINDOW_OPENGL);
+    sdl_win = SDL_CreateWindow("yagears", win_posx, win_posy, win_width, win_height, SDL_WINDOW_OPENGL);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gears_engine_version(gears_engine));
     SDL_GL_CreateContext(sdl_win);
     #else
@@ -1060,6 +1163,7 @@ int main(int argc, char *argv[])
     sprintf(sdl_variable, "SDL_VIDEO_WINDOW_POS=%d,%d", win_posx, win_posy);
     SDL_putenv(sdl_variable);
     sdl_win = SDL_SetVideoMode(win_width, win_height, 0, SDL_OPENGL);
+    SDL_WM_SetCaption("yagears", NULL);
     #endif
     sdl_idle_id = 1;
   }
@@ -1067,13 +1171,14 @@ int main(int argc, char *argv[])
 
   #if defined(SFML)
   if (!strcmp(toolkit, "sfml")) {
-    sfml_win = new SfRenderWindow;
+    sfml_win = new SfRenderWindow("yagears");
+    sfml_win->setPosition(sf::Vector2i(win_posx, win_posy));
   }
   #endif
 
   #if defined(WX)
   if (!strcmp(toolkit, "wx")) {
-    wx_win = new WxFrame;
+    wx_win = new WxFrame(wxT("yagears"));
   }
   #endif
 
@@ -1104,6 +1209,17 @@ int main(int argc, char *argv[])
       Fl::check();
       if (fltk_win->quit)
         break;
+    }
+  }
+  #endif
+
+  #if defined(GLFW)
+  if (!strcmp(toolkit, "glfw")) {
+    glfwDisplay(glfw_win);
+    while (!glfwWindowShouldClose(glfw_win))
+    {
+      glfwIdle(glfw_win);
+      glfwPollEvents();
     }
   }
   #endif
@@ -1203,6 +1319,13 @@ out:
   if (!strcmp(toolkit, "fltk")) {
     delete fltk_win;
     fl_close_display();
+  }
+  #endif
+
+  #if defined(GLFW)
+  if (!strcmp(toolkit, "glfw")) {
+    glfwDestroyWindow(glfw_win);
+    glfwTerminate();
   }
   #endif
 

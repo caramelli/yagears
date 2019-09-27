@@ -12,11 +12,13 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
   - EGL interface with Linux Framebuffer display
   - EGL interface with Wayland display
   - EGL interface with DRM display
+  - EGL interface with Raspberry Pi Dispmanx display
 
 and multiple graphical user interfaces:
 
   - EFL (Enlightenment Foundation Libraries)
   - FLTK (Fast Light ToolKit)
+  - GLFW (GL Frame Work)
   - GLUT (OpenGL Utility Toolkit)
   - GTK+ (Gimp ToolKit)
   - Qt (Q toolkit)

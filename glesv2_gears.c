@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2017  Nicolas Caramelli
+  Copyright (C) 2013-2019  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -415,23 +415,31 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     "}";
   const char *fragShaderSource =
     "precision mediump float;\n"
+    "uniform int u_TextureFlag;\n"
     "uniform sampler2D u_Texture;\n"
     "varying vec4 v_Color;\n"
     "varying vec2 v_TexCoord;\n"
     "void main()\n"
     "{\n"
-    "  vec4 t = texture2D(u_Texture, v_TexCoord);\n"
-    "  if (t.a == 0.0)\n"
-    "    gl_FragColor = v_Color;\n"
+    "  if (u_TextureFlag == 1) {\n"
+    "    vec4 t = texture2D(u_Texture, v_TexCoord);\n"
+    "    if (t.a == 0.0)\n"
+    "      gl_FragColor = v_Color;\n"
+    "    else\n"
+    "      gl_FragColor = t;\n"
+    "  }\n"
     "  else\n"
-    "    gl_FragColor = t;\n"
+    "    gl_FragColor = v_Color;\n"
     "}\n";
   GLint params;
   GLchar *log;
   GLint LightPos_loc;
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+  GLint TextureFlag_loc;
   GLint Texture_loc;
   const GLfloat zNear = 5, zFar = 60;
+
+  glClearColor(0, 0, 0, 1);
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
@@ -532,7 +540,9 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   LightPos_loc = glGetUniformLocation(gears->program, "u_LightPos");
   glUniform4fv(LightPos_loc, 1, pos);
 
-  /* Set u_Texture */
+  /* Set u_TextureFlag and u_Texture */
+  TextureFlag_loc = glGetUniformLocation(gears->program, "u_TextureFlag");
+  glUniform1i(TextureFlag_loc, getenv("NO_TEXTURE") ? 0 : 1);
   Texture_loc = glGetUniformLocation(gears->program, "u_Texture");
   glUniform1i(Texture_loc, 0);
 

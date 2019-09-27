@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2017  Nicolas Caramelli
+  Copyright (C) 2013-2019  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -21,14 +21,18 @@
   THE SOFTWARE.
 */
 
+#include "config.h"
+
 #include <GL/glut.h>
+void glutSetWindowData(void *data);
+void *glutGetWindowData();
+void glutLeaveMainLoop();
+void glutExit();
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-
-#include "config.h"
 
 #include "gears_engine.h"
 
@@ -179,7 +183,7 @@ int main(int argc, char *argv[])
 
   /* init */
 
-  glutInit(NULL, NULL);
+  glutInit(&argc, argv);
 
   win_width = glutGet(GLUT_SCREEN_WIDTH);
   win_height = glutGet(GLUT_SCREEN_HEIGHT);

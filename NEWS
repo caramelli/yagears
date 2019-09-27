@@ -1,15 +1,24 @@
+1.0
+---
+EGL with DRM display again used with GBM, implementation without still available
+EGL with Raspberry Pi Dispmanx display support
+GLFW support
+Qt 5 support
+
 0.9
 ---
 FLTK, SFML and wxWidgets support
+GTK+ 3 support
 GTK+ with GtkGLExt deprecated
 
 0.8
 ---
 Ambient color
+Internal implementation of GBM for EGL with DRM display
 
 0.7
 ---
-EGL with DRM display support
+EGL with DRM display support based on GBM
 Mosaic with GLUT support
 Texture with PNG and TIFF image
 

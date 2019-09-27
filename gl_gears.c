@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2017  Nicolas Caramelli
+  Copyright (C) 2013-2019  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -222,6 +222,8 @@ static gears_t *gl_gears_init(int win_width, int win_height)
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   const GLdouble zNear = 5, zFar = 60;
 
+  glClearColor(0, 0, 0, 1);
+
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
     printf("calloc gears failed\n");
@@ -232,7 +234,8 @@ static gears_t *gl_gears_init(int win_width, int win_height)
   glEnable(GL_NORMALIZE);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
-  glEnable(GL_TEXTURE_2D);
+  if (!getenv("NO_TEXTURE"))
+    glEnable(GL_TEXTURE_2D);
 
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
