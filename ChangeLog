@@ -1,3 +1,15 @@
+commit 0cd63117bd97706c96adf43a3ce604d72f860a69
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed Aug 12 18:33:37 2020 +0200
+
+    add Vulkan, add Meson build system
+
+commit 5be911113c5ed61b8350a96c759f8b723d983df2
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Sep 27 06:40:07 2019 +0200
+
+    update ChangeLog
+
 commit 8cbf51e2fd576096b45712e3fc249c5b08c2dbd8
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Fri Sep 27 06:39:48 2019 +0200
