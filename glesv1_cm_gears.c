@@ -1,6 +1,6 @@
 /*
-  yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  yagears                  Yet Another Gears OpenGL / Vulkan demo
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -49,7 +49,6 @@ struct gear {
 };
 
 struct gears {
-  image_t image;
   struct gear *gear1;
   struct gear *gear2;
   struct gear *gear3;
@@ -221,6 +220,8 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     k++;
   }
 
+  /* vertex buffer object */
+
   glGenBuffers(1, &gear->vbo);
   if (!gear->vbo) {
     printf("glGenBuffers failed\n");
@@ -234,9 +235,6 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   return gear;
 
 out:
-  if (gear->vbo) {
-    glDeleteBuffers(1, &gear->vbo);
-  }
   if (gear->strips) {
     free(gear->strips);
   }
@@ -249,7 +247,18 @@ out:
 
 static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
 {
+  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLint k;
+
+  glPushMatrix();
+  glLoadIdentity();
+  glLightfv(GL_LIGHT0, GL_POSITION, pos);
+  glPopMatrix();
+
+  if (getenv("NO_TEXTURE"))
+    glDisable(GL_TEXTURE_2D);
+  else
+    glEnable(GL_TEXTURE_2D);
 
   glPushMatrix();
 
@@ -293,10 +302,8 @@ static void delete_gear(struct gear *gear)
 static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
 {
   gears_t *gears = NULL;
-  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+  image_t image;
   const GLfloat zNear = 5, zFar = 60;
-
-  glClearColor(0, 0, 0, 1);
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
@@ -308,16 +315,23 @@ static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
   glEnable(GL_NORMALIZE);
   glEnable(GL_LIGHTING);
   glEnable(GL_LIGHT0);
-  if (!getenv("NO_TEXTURE"))
-    glEnable(GL_TEXTURE_2D);
 
-  glLightfv(GL_LIGHT0, GL_POSITION, pos);
+  /* load texture */
 
-  image_load(getenv("TEXTURE"), &gears->image);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gears->image.width, gears->image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gears->image.pixel_data);
+  image_load(getenv("TEXTURE"), &image);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
+  image_unload(&image);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+
+  /* set clear values, set viewport */
+
+  glClearColor(0, 0, 0, 1);
+
+  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+
+  /* create gears */
 
   gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
   if (!gears->gear1) {
@@ -333,8 +347,6 @@ static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
   if (!gears->gear3) {
     goto out;
   }
-
-  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
 
   glMatrixMode(GL_PROJECTION);
 
@@ -353,9 +365,6 @@ out:
   }
   if (gears->gear1) {
     delete_gear(gears->gear1);
-  }
-  if (gears->image.pixel_data) {
-    image_unload(&gears->image);
   }
   free(gears);
   return NULL;
@@ -392,7 +401,6 @@ static void glesv1_cm_gears_term(gears_t *gears)
   delete_gear(gears->gear1);
   delete_gear(gears->gear2);
   delete_gear(gears->gear3);
-  image_unload(&gears->image);
 
   free(gears);
 

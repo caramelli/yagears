@@ -1,20 +1,20 @@
-Yet Another Gears OpenGL demo
------------------------------
+Yet Another Gears OpenGL / Vulkan demo
+--------------------------------------
 
 The yagears package contains a version of the popular gears OpenGL demo (with
-OpenGL ES 1.1 CM and 2.0 ports) that supports multiple graphic renderers:
+OpenGL ES 1.1 CM and 2.0 ports) that supports multiple OpenGL Backends:
 
-  - GLX interface (OpenGL Extension to the X Window System)
-  - DirectFBGL interface (OpenGL Extension for DirectFB)
-  - GLFBDev interface (OpenGL Extension to the Linux Framebuffer)
-  - EGL interface with X11 display
-  - EGL interface with DirectFB display
-  - EGL interface with Linux Framebuffer display
-  - EGL interface with Wayland display
-  - EGL interface with DRM display
-  - EGL interface with Raspberry Pi Dispmanx display
+  - OpenGL extension for Xlib (GLX)
+  - OpenGL extension for DirectFB (DirectFBGL)
+  - OpenGL extension for Linux Framebuffer (GLFBDev)
+  - EGL interface for Xlib
+  - EGL interface for DirectFB
+  - EGL interface for Linux Framebuffer
+  - EGL interface for Wayland
+  - EGL interface for DRM
+  - EGL interface for Raspberry Pi Dispmanx
 
-and multiple graphical user interfaces:
+and multiple Graphical User Interface Toolkits:
 
   - EFL (Enlightenment Foundation Libraries)
   - FLTK (Fast Light ToolKit)
@@ -25,6 +25,13 @@ and multiple graphical user interfaces:
   - SDL (Simple Directmedia Layer)
   - SFML (Simple and Fast Multimedia Library)
   - wxWidgets (Windows X Widgets)
+
+The package also provides a Vulkan port that supports multiple Vulkan WSIs:
+
+  - Vulkan extension for Xlib (Xlib WSI)
+  - Vulkan extension for DirectFB (DirectFB WSI)
+  - Vulkan extension for Linux Framebuffer (FBDev WSI)
+  - Vulkan extension for Wayland (Wayland WSI)
 
 Have fun,
 

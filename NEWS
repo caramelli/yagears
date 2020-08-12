@@ -1,3 +1,8 @@
+2.0
+---
+Vulkan with Xlib, DirectFB, FBDev, Wayland WSI support
+Meson build system
+
 1.0
 ---
 EGL with DRM display again used with GBM, implementation without still available
@@ -50,4 +55,5 @@ Input event handling
 0.1
 ---
 GLX, DirectFBGL, GLFBDev support
-EGL with X11, DirectFB, FBDev display support
+EGL with Xlib, DirectFB, FBDev display support
+Autotools build system

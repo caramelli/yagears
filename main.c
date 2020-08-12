@@ -1,6 +1,6 @@
 /*
-  yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  yagears                  Yet Another Gears OpenGL / Vulkan demo
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -182,6 +182,14 @@ static void x11_keyboard_handle_key(XEvent *event)
     case XK_Left:
       view_ry += 5.0;
       break;
+    case XK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -225,6 +233,14 @@ static void dfb_keyboard_handle_key(DFBWindowEvent *event)
       break;
     case DIKS_CURSOR_LEFT:
       view_ry += 5.0;
+      break;
+    case DIKS_SMALL_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -276,6 +292,14 @@ static void fb_keyboard_handle_key(struct input_event *event)
       break;
     case KEY_LEFT:
       view_ry += 5.0;
+      break;
+    case KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -395,6 +419,14 @@ static void wl_keyboard_handle_key(void *data, struct wl_keyboard *keyboard, uns
       break;
     case XKB_KEY_Left:
       view_ry += 5.0;
+      break;
+    case XKB_KEY_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -608,6 +640,14 @@ static void drm_keyboard_handle_key(struct input_event *event)
     case KEY_LEFT:
       view_ry += 5.0;
       break;
+    case KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -619,13 +659,14 @@ static void drm_keyboard_handle_key(struct input_event *event)
 #endif
 
 #if defined(EGL_RPI)
-static void rpi_keyboard_handle_key(unsigned char event)
+static void rpi_keyboard_handle_key(char *event)
 {
-  switch (event) {
-    case 27:
+  if (event) {
+    if (!strcmp(event, "\x1b")) {
       sighandler(SIGTERM);
       return;
-    case ' ':
+    }
+    else if (!strcmp(event, "\x20")) {
       animate = !animate;
       if (animate) {
         redisplay = 1;
@@ -634,26 +675,36 @@ static void rpi_keyboard_handle_key(unsigned char event)
         redisplay = 0;
       }
       return;
-    case 'd':
+    }
+    else if (!strcmp(event, "\x1b[6~")) {
       view_tz -= -5.0;
-      break;
-    case 'u':
+    }
+    else if (!strcmp(event, "\x1b[5~")) {
       view_tz += -5.0;
-      break;
-    case 'j':
+    }
+    else if (!strcmp(event,"\x1b[B")) {
       view_rx -= 5.0;
-      break;
-    case 'k':
+    }
+    else if (!strcmp(event,"\x1b[A")) {
       view_rx += 5.0;
-      break;
-    case 'l':
+    }
+    else if (!strcmp(event,"\x1b[C")) {
       view_ry -= 5.0;
-      break;
-    case 'h':
+    }
+    else if (!strcmp(event,"\x1b[D")) {
       view_ry += 5.0;
-      break;
-    default:
+    }
+    else if (!strcmp(event, "\x74")) {
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+    }
+    else {
       return;
+    }
   }
 
   if (!animate) {
@@ -751,14 +802,13 @@ int main(int argc, char *argv[])
   EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
   struct termios *rpi_termios = NULL, rpi_termios_new;
   int rpi_fdflags = -1;
-  unsigned char rpi_event;
+  char rpi_event[5];
   #endif
-
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
   EGLint egl_config_attr[16];
-  EGLint egl_nconfigs = 0;
+  EGLint egl_configs_count = 0;
   EGLConfig *egl_configs = NULL, egl_config = NULL;
   EGLint egl_ctx_attr[3];
   EGLContext egl_ctx = NULL;
@@ -811,9 +861,9 @@ int main(int argc, char *argv[])
   }
 
   if (argc != 5 || !backend_arg || !engine_arg) {
-    printf("\n\tUsage: %s -b backend -e engine\n\n", argv[0]);
-    printf("\t\tbackends: %s\n\n", backends);
-    printf("\t\tengines:  ");
+    printf("\n\tUsage: %s -b Backend -e Engine\n\n", argv[0]);
+    printf("\t\tBackends: %s\n\n", backends);
+    printf("\t\tEngines:  ");
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
@@ -831,7 +881,7 @@ int main(int argc, char *argv[])
   }
 
   if (!c) {
-    printf("%s: backend unknown\n", backend_arg);
+    printf("%s: Backend unknown\n", backend_arg);
     return EXIT_FAILURE;
   }
 
@@ -841,7 +891,7 @@ int main(int argc, char *argv[])
   }
 
   if (opt == gears_engine_nb()) {
-    printf("%s: engine unknown\n", engine_arg);
+    printf("%s: Engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
 
@@ -1234,19 +1284,19 @@ int main(int argc, char *argv[])
     egl_config_attr[opt++] = EGL_RENDERABLE_TYPE;
     egl_config_attr[opt++] = !gears_engine_version(gears_engine) ? EGL_OPENGL_BIT : gears_engine_version(gears_engine) == 1 ? EGL_OPENGL_ES_BIT : EGL_OPENGL_ES2_BIT;
     egl_config_attr[opt] = EGL_NONE;
-    err = eglChooseConfig(egl_dpy, egl_config_attr, NULL, 0, &egl_nconfigs);
-    if (!err || !egl_nconfigs) {
-      printf("eglChooseConfig failed: 0x%x, %d\n", eglGetError(), egl_nconfigs);
+    err = eglChooseConfig(egl_dpy, egl_config_attr, NULL, 0, &egl_configs_count);
+    if (!err || !egl_configs_count) {
+      printf("eglChooseConfig failed: 0x%x, %d\n", eglGetError(), egl_configs_count);
       goto out;
     }
 
-    egl_configs = calloc(egl_nconfigs, sizeof(EGLConfig));
+    egl_configs = calloc(egl_configs_count, sizeof(EGLConfig));
     if (!egl_configs) {
-      printf("malloc failed: %s\n", strerror(errno));
+      printf("calloc failed: %s\n", strerror(errno));
       goto out;
     }
 
-    err = eglChooseConfig(egl_dpy, egl_config_attr, egl_configs, egl_nconfigs, &egl_nconfigs);
+    err = eglChooseConfig(egl_dpy, egl_config_attr, egl_configs, egl_configs_count, &egl_configs_count);
     if (!err) {
       printf("eglChooseConfig failed: 0x%x\n", eglGetError());
       goto out;
@@ -1270,7 +1320,7 @@ int main(int argc, char *argv[])
 
     XMoveWindow(x11_dpy, x11_win, win_posx, win_posy);
 
-    x11_event_mask = ExposureMask;
+    x11_event_mask = ExposureMask | KeyPressMask;
     XSelectInput(x11_dpy, x11_win, x11_event_mask);
   }
   #endif
@@ -1294,6 +1344,31 @@ int main(int argc, char *argv[])
       printf("GetSurface failed: %s\n", DirectFBErrorString(err));
       goto out;
     }
+
+    dfb_event_mask ^= DWET_KEYDOWN;
+    err = dfb_window->DisableEvents(dfb_window, dfb_event_mask);
+    if (err) {
+      printf("DisableEvents failed: %s\n", DirectFBErrorString(err));
+      goto out;
+    }
+
+    err = dfb_window->CreateEventBuffer(dfb_window, &dfb_event_buffer);
+    if (err) {
+      printf("CreateEventBuffer failed: %s\n", DirectFBErrorString(err));
+      goto out;
+    }
+
+    err = dfb_window->SetOpacity(dfb_window, 0xff);
+    if (err) {
+      printf("SetOpacity failed: %s\n", DirectFBErrorString(err));
+      goto out;
+    }
+
+    err = dfb_window->RequestFocus(dfb_window);
+    if (err) {
+      printf("RequestFocus failed: %s\n", DirectFBErrorString(err));
+      goto out;
+    }
   }
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
@@ -1308,6 +1383,21 @@ int main(int argc, char *argv[])
     fb_win->height = win_height;
     fb_win->posx = win_posx;
     fb_win->posy = win_posy;
+
+    if (getenv("KEYBOARD")) {
+      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+      if (fb_keyboard == -1) {
+        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        goto out;
+      }
+    }
+    else {
+      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+      if (fb_keyboard == -1) {
+        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        goto out;
+      }
+    }
   }
   #endif
   #if defined(EGL_WAYLAND)
@@ -1317,16 +1407,6 @@ int main(int argc, char *argv[])
       printf("wl_compositor_create_surface failed\n");
       goto out;
     }
-
-    wl_win = calloc(1, sizeof(struct wl_window));
-    if (!wl_win) {
-      printf("wl_window calloc failed: %s\n", strerror(errno));
-      goto out;
-    }
-
-    wl_win->surface = wl_surface;
-    wl_win->width = win_width;
-    wl_win->height = win_height;
 
     wl_shell_surface = wl_shell_get_shell_surface(wl_data.wl_shell, wl_surface);
     if (!wl_shell_surface) {
@@ -1339,6 +1419,22 @@ int main(int argc, char *argv[])
     #endif
 
     wl_shell_surface_set_toplevel(wl_shell_surface);
+
+    wl_win = calloc(1, sizeof(struct wl_window));
+    if (!wl_win) {
+      printf("wl_window calloc failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    wl_win->surface = wl_surface;
+    wl_win->width = win_width;
+    wl_win->height = win_height;
+
+    wl_data.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (!wl_data.xkb_context) {
+      printf("xkb_context_new failed\n");
+      goto out;
+    }
   }
   #endif
   #if defined(EGL_DRM)
@@ -1360,6 +1456,27 @@ int main(int argc, char *argv[])
         printf("gbm_surface_create failed\n");
         goto out;
       }
+    }
+
+    if (getenv("KEYBOARD")) {
+      drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+      if (drm_keyboard == -1) {
+        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        goto out;
+      }
+    }
+    else {
+      drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+      if (drm_keyboard == -1) {
+        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        goto out;
+      }
+    }
+
+    err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
+    if (err < 0) {
+      printf("libevdev_new_from_fd failed: %s\n", strerror(-err));
+      goto out;
     }
   }
   #endif
@@ -1387,6 +1504,12 @@ int main(int argc, char *argv[])
       goto out;
     }
 
+    err = vc_dispmanx_update_submit_sync(rpi_update);
+    if (err == -1) {
+      printf("vc_dispmanx_update_submit_sync failed\n");
+      goto out;
+    }
+
     rpi_win = calloc(1, sizeof(EGL_DISPMANX_WINDOW_T));
     if (!rpi_win) {
       printf("EGL_DISPMANX_WINDOW_T calloc failed: %s\n", strerror(errno));
@@ -1397,9 +1520,36 @@ int main(int argc, char *argv[])
     rpi_win->width = win_width;
     rpi_win->height = win_height;
 
-    err = vc_dispmanx_update_submit_sync(rpi_update);
+    rpi_termios = calloc(1, sizeof(struct termios));
+    if (!rpi_termios) {
+      printf("rpi_termios calloc failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    err = tcgetattr(STDIN_FILENO, rpi_termios);
     if (err == -1) {
-      printf("vc_dispmanx_update_submit_sync failed\n");
+      printf("tcgetattr failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    memcpy(&rpi_termios_new, rpi_termios, sizeof(struct termios));
+    rpi_termios_new.c_lflag &= ~(ICANON | ECHO);
+
+    err = tcsetattr(STDIN_FILENO, TCSANOW, &rpi_termios_new);
+    if (err == -1) {
+      printf("tcsetattr failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    rpi_fdflags = fcntl(STDIN_FILENO, F_GETFL);
+    if (rpi_fdflags == -1) {
+      printf("fcntl F_GETFL failed: %s\n", strerror(errno));
+      goto out;
+    }
+
+    err = fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags | O_NONBLOCK);
+    if (err == -1) {
+      printf("fcntl F_SETFL failed: %s\n", strerror(errno));
       goto out;
     }
   }
@@ -1478,14 +1628,13 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV)
   if (!strcmp(backend, "gl-fbdev")) {
-    glFBDevSetWindow(fb_buffer, fb_win);
-
     fb_ctx = glFBDevCreateContext(fb_visual, NULL);
     if (!fb_ctx) {
       printf("glFBDevCreateContext failed\n");
       goto out;
     }
 
+    glFBDevSetWindow(fb_buffer, fb_win);
     err = glFBDevMakeCurrent(fb_ctx, fb_buffer, fb_buffer);
     if (!err) {
       printf("glFBDevMakeCurrent failed\n");
@@ -1516,130 +1665,6 @@ int main(int argc, char *argv[])
     }
 
     eglSwapInterval(egl_dpy, 0);
-  }
-  #endif
-
-  /* initialize input event */
-
-  #if defined(GL_X11) || defined(EGL_X11)
-  if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
-    x11_event_mask = x11_event_mask | KeyPressMask;
-    XSelectInput(x11_dpy, x11_win, x11_event_mask);
-  }
-  #endif
-  #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
-  if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-    dfb_event_mask ^= DWET_KEYDOWN;
-    err = dfb_window->DisableEvents(dfb_window, dfb_event_mask);
-    if (err) {
-      printf("DisableEvents failed: %s\n", DirectFBErrorString(err));
-      goto out;
-    }
-
-    err = dfb_window->CreateEventBuffer(dfb_window, &dfb_event_buffer);
-    if (err) {
-      printf("CreateEventBuffer failed: %s\n", DirectFBErrorString(err));
-      goto out;
-    }
-
-    err = dfb_window->SetOpacity(dfb_window, 0xff);
-    if (err) {
-      printf("SetOpacity failed: %s\n", DirectFBErrorString(err));
-      goto out;
-    }
-
-    err = dfb_window->RequestFocus(dfb_window);
-    if (err) {
-      printf("RequestFocus failed: %s\n", DirectFBErrorString(err));
-      goto out;
-    }
-  }
-  #endif
-  #if defined(GL_FBDEV) || defined(EGL_FBDEV)
-  if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    if (getenv("KEYBOARD")) {
-      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
-        goto out;
-      }
-    }
-    else {
-      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
-        goto out;
-      }
-    }
-  }
-  #endif
-  #if defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-wayland")) {
-    wl_data.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    if (!wl_data.xkb_context) {
-      printf("xkb_context_new failed\n");
-      goto out;
-    }
-  }
-  #endif
-  #if defined(EGL_DRM)
-  if (!strcmp(backend, "egl-drm")) {
-    if (getenv("KEYBOARD")) {
-      drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
-        goto out;
-      }
-    }
-    else {
-      drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
-        goto out;
-      }
-    }
-
-    err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
-    if (err < 0) {
-      printf("libevdev_new_from_fd failed: %s\n", strerror(-err));
-      goto out;
-    }
-  }
-  #endif
-  #if defined(EGL_RPI)
-  if (!strcmp(backend, "egl-rpi")) {
-    rpi_termios = calloc(1, sizeof(struct termios));
-    if (!rpi_termios) {
-      printf("rpi_termios calloc failed: %s\n", strerror(errno));
-      goto out;
-    }
-
-    err = tcgetattr(STDIN_FILENO, rpi_termios);
-    if (err == -1) {
-      printf("tcgetattr failed: %s\n", strerror(errno));
-      goto out;
-    }
-
-    memcpy(&rpi_termios_new, rpi_termios, sizeof(struct termios));
-    rpi_termios_new.c_lflag &= ~(ICANON | ECHO);
-
-    err = tcsetattr(STDIN_FILENO, TCSANOW, &rpi_termios_new);
-    if (err == -1) {
-      printf("tcsetattr failed: %s\n", strerror(errno));
-      goto out;
-    }
-
-    rpi_fdflags = fcntl(STDIN_FILENO, F_GETFL);
-    if (rpi_fdflags == -1) {
-      printf("fcntl F_GETFL failed: %s\n", strerror(errno));
-      goto out;
-    }
-
-    err = fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags | O_NONBLOCK);
-    if (err == -1) {
-      printf("fcntl F_SETFL failed: %s\n", strerror(errno));
-      goto out;
-    }
   }
   #endif
 
@@ -1824,9 +1849,9 @@ int main(int argc, char *argv[])
         redisplay = 0;
       }
 
-      rpi_event = 0;
-      if (read(STDIN_FILENO, &rpi_event, sizeof(unsigned char)) > 0) {
-        if (rpi_event) {
+      memset(rpi_event, 0, sizeof(rpi_event));
+      if (read(STDIN_FILENO, rpi_event, 4) > 0) {
+        if (rpi_event[0]) {
           rpi_keyboard_handle_key(rpi_event);
         }
       }
@@ -1877,68 +1902,6 @@ int main(int argc, char *argv[])
   ret = EXIT_SUCCESS;
 
 out:
-
-  /* release input event */
-
-  #if defined(GL_X11) || defined(EGL_X11)
-  if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
-    if (x11_event_mask) {
-      XSelectInput(x11_dpy, x11_win, NoEventMask);
-    }
-  }
-  #endif
-  #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
-  if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-    if (dfb_event_buffer) {
-      dfb_event_buffer->Release(dfb_event_buffer);
-    }
-  }
-  #endif
-  #if defined(GL_FBDEV) || defined(EGL_FBDEV)
-  if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    if (fb_keyboard != -1) {
-      close(fb_keyboard);
-    }
-  }
-  #endif
-  #if defined(EGL_WAYLAND)
-  if (!strcmp(backend, "egl-wayland")) {
-    if (wl_data.xkb_state) {
-      xkb_state_unref(wl_data.xkb_state);
-    }
-
-    if (wl_data.xkb_keymap) {
-      xkb_map_unref(wl_data.xkb_keymap);
-    }
-
-    if (wl_data.xkb_context) {
-      xkb_context_unref(wl_data.xkb_context);
-    }
-  }
-  #endif
-  #if defined(EGL_DRM)
-  if (!strcmp(backend, "egl-drm")) {
-    if (drm_evdev) {
-      libevdev_free(drm_evdev);
-    }
-
-    if (drm_keyboard != -1) {
-      close(drm_keyboard);
-    }
-  }
-  #endif
-  #if defined(EGL_RPI)
-  if (!strcmp(backend, "egl-rpi")) {
-    if (rpi_fdflags != -1) {
-      fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags);
-    }
-
-    if (rpi_termios) {
-      tcsetattr(STDIN_FILENO, TCSANOW, rpi_termios);
-      free(rpi_termios);
-    }
-  }
-  #endif
 
   /* destroy context */
 
@@ -2003,6 +1966,10 @@ out:
   #endif
   #if defined(GL_X11) || defined(EGL_X11)
   if (!strcmp(backend, "gl-x11") || !strcmp(backend, "egl-x11")) {
+    if (x11_event_mask) {
+      XSelectInput(x11_dpy, x11_win, NoEventMask);
+    }
+
     if (x11_win) {
       XDestroyWindow(x11_dpy, x11_win);
     }
@@ -2019,6 +1986,10 @@ out:
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
+    if (dfb_event_buffer) {
+      dfb_event_buffer->Release(dfb_event_buffer);
+    }
+
     if (dfb_win) {
       dfb_win->Release(dfb_win);
     }
@@ -2053,6 +2024,10 @@ out:
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
+    if (fb_keyboard != -1) {
+      close(fb_keyboard);
+    }
+
     if (fb_win) {
       free(fb_win);
     }
@@ -2064,6 +2039,18 @@ out:
   #endif
   #if defined(EGL_WAYLAND)
   if (!strcmp(backend, "egl-wayland")) {
+    if (wl_data.xkb_state) {
+      xkb_state_unref(wl_data.xkb_state);
+    }
+
+    if (wl_data.xkb_keymap) {
+      xkb_map_unref(wl_data.xkb_keymap);
+    }
+
+    if (wl_data.xkb_context) {
+      xkb_context_unref(wl_data.xkb_context);
+    }
+
     if (wl_shell_surface) {
       wl_shell_surface_destroy(wl_shell_surface);
     }
@@ -2107,6 +2094,14 @@ out:
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
+    if (drm_evdev) {
+      libevdev_free(drm_evdev);
+    }
+
+    if (drm_keyboard != -1) {
+      close(drm_keyboard);
+    }
+
     if (drm_win) {
       if (getenv("NO_GBM")) {
         free(drm_win);
@@ -2161,6 +2156,15 @@ out:
   #endif
   #if defined(EGL_RPI)
   if (!strcmp(backend, "egl-rpi")) {
+    if (rpi_fdflags != -1) {
+      fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags);
+    }
+
+    if (rpi_termios) {
+      tcsetattr(STDIN_FILENO, TCSANOW, rpi_termios);
+      free(rpi_termios);
+    }
+
     if (rpi_element != DISPMANX_NO_HANDLE) {
       if ((rpi_update = vc_dispmanx_update_start(0)) != DISPMANX_NO_HANDLE) {
         vc_dispmanx_element_remove(rpi_update, rpi_element);

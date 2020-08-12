@@ -21,11 +21,8 @@
   THE SOFTWARE.
 */
 
-typedef struct {
-  int width;
-  int height;
-  unsigned char *pixel_data;
-} image_t;
+typedef struct gears gears_t;
 
-void image_load(char *filename, image_t *image);
-void image_unload(image_t *image);
+gears_t *vk_gears_init(int, int, void *, void *);
+void vk_gears_draw(gears_t *, float, float, float, float, void *);
+void vk_gears_term(gears_t *, void *);

@@ -1,0 +1,103 @@
+# Configuration options
+
+option('gl',
+        type: 'boolean',
+        description: 'OpenGL 1.0 engine')
+option('glesv1_cm',
+        type: 'boolean',
+        description: 'OpenGL ES 1.1 CM engine')
+option('glesv2',
+        type: 'boolean',
+        description: 'OpenGL ES 2.0 engine')
+
+option('gl-x11',
+        type: 'boolean',
+        description: 'OpenGL extension for Xlib backend')
+option('gl-directfb',
+        type: 'boolean',
+        description: 'OpenGL extension for DirectFB backend')
+option('gl-fbdev',
+        type: 'boolean',
+        description: 'OpenGL extension for Linux Framebuffer backend')
+option('egl-x11',
+        type: 'boolean',
+        description: 'EGL interface for Xlib backend')
+option('egl-directfb',
+        type: 'boolean',
+        description: 'EGL interface for DirectFB backend')
+option('egl-fbdev',
+        type: 'boolean',
+        description: 'EGL interface for Linux Framebuffer backend')
+option('egl-wayland',
+        type: 'boolean',
+        description: 'EGL interface for Wayland backend')
+option('egl-drm',
+        type: 'boolean',
+        description: 'EGL interface for DRM backend')
+option('egl-rpi',
+        type: 'boolean',
+        description: 'EGL interface for Raspberry Pi Dispmanx backend')
+
+option('vk-x11',
+        type: 'boolean',
+        description: 'Vulkan extension for Xlib WSI')
+option('vk-directfb',
+        type: 'boolean',
+        description: 'Vulkan extension for DirectFB WSI')
+option('vk-fbdev',
+        type: 'boolean',
+        description: 'Vulkan extension for Linux Framebuffer WSI')
+option('vk-wayland',
+        type: 'boolean',
+        description: 'Vulkan extension for Wayland WSI')
+
+option('efl',
+        type: 'boolean',
+        description: 'EFL GUI toolkit')
+option('fltk',
+        type: 'boolean',
+        description: 'FLTK GUI toolkit')
+option('glfw',
+        type: 'boolean',
+        description: 'GLFW GUI toolkit')
+option('glut',
+        type: 'boolean',
+        description: 'GLUT GUI toolkit')
+option('gtk',
+        type: 'boolean',
+        description: 'GTK+ GUI toolkit')
+option('qt',
+        type: 'boolean',
+        description: 'Qt GUI toolkit')
+option('sdl',
+        type: 'boolean',
+        description: 'SDL GUI toolkit')
+option('sfml',
+        type: 'boolean',
+        description: 'SFML GUI toolkit')
+option('wx',
+        type: 'boolean',
+        description: 'wxWidgets GUI toolkit')
+
+option('with-gtk',
+        type: 'combo',
+        choices : ['2', '3'],
+        value : '3',
+        description: 'GTK+ GUI toolkit version')
+option('with-qt',
+        type: 'combo',
+        choices : ['4', '5'],
+        value : '5',
+        description: 'Qt GUI toolkit version')
+option('with-sdl',
+        type: 'combo',
+        choices : ['1', '2'],
+        value : '2',
+        description: 'SDL GUI toolkit version')
+
+option('png',
+        type: 'boolean',
+        description: 'PNG loader')
+option('tiff',
+        type: 'boolean',
+        description: 'TIFF loader')

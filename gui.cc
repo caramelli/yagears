@@ -1,6 +1,6 @@
 /*
-  yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  yagears                  Yet Another Gears OpenGL / Vulkan demo
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -33,12 +33,6 @@
 #if defined(EFL)
 #include <Elementary.h>
 #endif
-#if defined(FLTK)
-#include <FL/Fl.H>
-#include <FL/Fl_Gl_Window.H>
-void fl_open_display();
-void fl_close_display();
-#endif
 #if defined(GLFW)
 #include <GLFW/glfw3.h>
 #endif
@@ -66,6 +60,12 @@ void glutExit();
 #else
 #include <QtGui>
 #endif
+#endif
+#if defined(FLTK)
+#include <FL/Fl.H>
+#include <FL/Fl_Gl_Window.H>
+void fl_open_display();
+void fl_close_display();
 #endif
 #if defined(SDL)
 #include <SDL.h>
@@ -408,11 +408,7 @@ static gboolean gtk_render(GtkWidget *widget)
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
   #if !GTK_CHECK_VERSION(3,16,0)
-  #if GTK_CHECK_VERSION(3,0,0)
   gtk_gl_area_swap_buffers(GTK_GL_AREA(widget));
-  #else
-  gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
-  #endif
   #endif
 
   return TRUE;
@@ -909,9 +905,9 @@ int main(int argc, char *argv[])
   }
 
   if (argc != 5 || !toolkit_arg || !engine_arg) {
-    printf("\n\tUsage: %s -t toolkit -e engine\n\n", argv[0]);
-    printf("\t\ttoolkits: %s\n\n", toolkits);
-    printf("\t\tengines:  ");
+    printf("\n\tUsage: %s -t Toolkit -e Engine\n\n", argv[0]);
+    printf("\t\tToolkits: %s\n\n", toolkits);
+    printf("\t\tEngines:  ");
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
@@ -929,7 +925,7 @@ int main(int argc, char *argv[])
   }
 
   if (!c) {
-    printf("%s: toolkit unknown\n", toolkit_arg);
+    printf("%s: Toolkit unknown\n", toolkit_arg);
     return EXIT_FAILURE;
   }
 
@@ -939,7 +935,7 @@ int main(int argc, char *argv[])
   }
 
   if (opt == gears_engine_nb()) {
-    printf("%s: engine unknown\n", engine_arg);
+    printf("%s: Engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
 

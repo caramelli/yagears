@@ -1,6 +1,6 @@
 /*
-  yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  yagears                  Yet Another Gears OpenGL / Vulkan demo
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
   int glut_win[COLS * ROWS];
 
   if (argc != 2) {
-    printf("\n\tUsage: %s engine : ", argv[0]);
+    printf("\n\tUsage: %s Engine : ", argv[0]);
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
   }
 
   if (opt == gears_engine_nb()) {
-    printf("%s: engine unknown\n", argv[1]);
+    printf("%s: Engine unknown\n", argv[1]);
     return EXIT_FAILURE;
   }
 

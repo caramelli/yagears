@@ -1,6 +1,6 @@
 /*
-  yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  yagears                  Yet Another Gears OpenGL / Vulkan demo
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -134,9 +134,6 @@ struct gear {
 
 struct gears {
   GLuint program;
-  GLuint vertShader;
-  GLuint fragShader;
-  image_t image;
   struct gear *gear1;
   struct gear *gear2;
   struct gear *gear3;
@@ -309,6 +306,8 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
     k++;
   }
 
+  /* vertex buffer object */
+
   glGenBuffers(1, &gear->vbo);
   if (!gear->vbo) {
     printf("glGenBuffers failed\n");
@@ -322,9 +321,6 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   return gear;
 
 out:
-  if (gear->vbo) {
-    glDeleteBuffers(1, &gear->vbo);
-  }
   if (gear->strips) {
     free(gear->strips);
   }
@@ -337,30 +333,39 @@ out:
 
 static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color, GLfloat *View, GLfloat *Projection, GLuint program)
 {
+  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLfloat ModelView[16], ModelViewProjection[16];
+  GLint LightPos_loc;
+  GLint TextureFlag_loc;
   GLint ModelViewProjection_loc;
   GLint Normal_loc;
   GLint Color_loc;
   GLint k;
+
+  LightPos_loc = glGetUniformLocation(program, "u_LightPos");
+  glUniform4fv(LightPos_loc, 1, pos);
+
+  TextureFlag_loc = glGetUniformLocation(program, "u_TextureFlag");
+  if (getenv("NO_TEXTURE"))
+    glUniform1i(TextureFlag_loc, 0);
+  else
+    glUniform1i(TextureFlag_loc, 1);
 
   memcpy(ModelView, View, sizeof(ModelView));
 
   translate(ModelView, model_tx, model_ty, 0);
   rotate(ModelView, model_rz, 0, 0, 1);
 
-  /* Set u_ModelViewProjectionMatrix */
   memcpy(ModelViewProjection, Projection, sizeof(ModelViewProjection));
   multiply(ModelViewProjection, ModelView);
   ModelViewProjection_loc = glGetUniformLocation(program, "u_ModelViewProjectionMatrix");
   glUniformMatrix4fv(ModelViewProjection_loc, 1, GL_FALSE, ModelViewProjection);
 
-  /* Set u_NormalMatrix */
   invert(ModelView);
   transpose(ModelView);
   Normal_loc = glGetUniformLocation(program, "u_NormalMatrix");
   glUniformMatrix4fv(Normal_loc, 1, GL_FALSE, ModelView);
 
-  /* Set u_Color */
   Color_loc = glGetUniformLocation(program, "u_Color");
   glUniform4fv(Color_loc, 1, color);
 
@@ -397,49 +402,19 @@ static void delete_gear(struct gear *gear)
 static gears_t *glesv2_gears_init(int win_width, int win_height)
 {
   gears_t *gears = NULL;
-  const char *vertShaderSource =
-    "attribute vec3 a_Vertex;\n"
-    "attribute vec3 a_Normal;\n"
-    "attribute vec2 a_TexCoord;\n"
-    "uniform vec4 u_LightPos;\n"
-    "uniform mat4 u_ModelViewProjectionMatrix;\n"
-    "uniform mat4 u_NormalMatrix;\n"
-    "uniform vec4 u_Color;\n"
-    "varying vec4 v_Color;\n"
-    "varying vec2 v_TexCoord;\n"
-    "void main(void)\n"
-    "{\n"
-    "  gl_Position = u_ModelViewProjectionMatrix * vec4(a_Vertex, 1);\n"
-    "  v_Color = u_Color * vec4(0.2, 0.2, 0.2, 1) + u_Color * dot(normalize(u_LightPos.xyz), normalize(vec3(u_NormalMatrix * vec4(a_Normal, 1))));\n"
-    "  v_TexCoord = a_TexCoord;\n"
-    "}";
-  const char *fragShaderSource =
-    "precision mediump float;\n"
-    "uniform int u_TextureFlag;\n"
-    "uniform sampler2D u_Texture;\n"
-    "varying vec4 v_Color;\n"
-    "varying vec2 v_TexCoord;\n"
-    "void main()\n"
-    "{\n"
-    "  if (u_TextureFlag == 1) {\n"
-    "    vec4 t = texture2D(u_Texture, v_TexCoord);\n"
-    "    if (t.a == 0.0)\n"
-    "      gl_FragColor = v_Color;\n"
-    "    else\n"
-    "      gl_FragColor = t;\n"
-    "  }\n"
-    "  else\n"
-    "    gl_FragColor = v_Color;\n"
-    "}\n";
+  const char vertShaderSource[] = {
+    #include "vert.xxd"
+  };
+  const char fragShaderSource[] = {
+    #include "frag.xxd"
+  };
+  const GLchar *code;
   GLint params;
   GLchar *log;
-  GLint LightPos_loc;
-  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
-  GLint TextureFlag_loc;
-  GLint Texture_loc;
+  GLuint vertShader = 0;
+  GLuint fragShader = 0;
+  image_t image;
   const GLfloat zNear = 5, zFar = 60;
-
-  glClearColor(0, 0, 0, 1);
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
@@ -457,65 +432,67 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
   /* vertex shader */
 
-  gears->vertShader = glCreateShader(GL_VERTEX_SHADER);
-  if (!gears->vertShader) {
+  vertShader = glCreateShader(GL_VERTEX_SHADER);
+  if (!vertShader) {
     printf("glCreateShader vertex failed\n");
     goto out;
   }
 
-  glShaderSource(gears->vertShader, 1, &vertShaderSource, NULL);
+  code = vertShaderSource;
+  glShaderSource(vertShader, 1, &code, NULL);
 
-  glCompileShader(gears->vertShader);
-  glGetShaderiv(gears->vertShader, GL_COMPILE_STATUS, &params);
+  glCompileShader(vertShader);
+  glGetShaderiv(vertShader, GL_COMPILE_STATUS, &params);
   if (!params) {
-    glGetShaderiv(gears->vertShader, GL_INFO_LOG_LENGTH, &params);
+    glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &params);
     log = calloc(1, params);
     if (!log) {
       printf("calloc log failed\n");
       goto out;
     }
-    glGetShaderInfoLog(gears->vertShader, params, NULL, log);
+    glGetShaderInfoLog(vertShader, params, NULL, log);
     printf("glCompileShader vertex failed: %s", log);
     free(log);
     goto out;
   }
 
-  glAttachShader(gears->program, gears->vertShader);
+  glAttachShader(gears->program, vertShader);
 
   /* fragment shader */
 
-  gears->fragShader = glCreateShader(GL_FRAGMENT_SHADER);
-  if (!gears->fragShader) {
+  fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+  if (!fragShader) {
     printf("glCreateShader fragment failed\n");
     goto out;
   }
 
+  code = fragShaderSource;
   if (strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.20") ||
       strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.30")) {
-    fragShaderSource += strlen("precision mediump float;\n");
+    code += strlen("precision mediump float;\n");
   }
-  glShaderSource(gears->fragShader, 1, &fragShaderSource, NULL);
+  glShaderSource(fragShader, 1, &code, NULL);
 
-  glCompileShader(gears->fragShader);
-  glGetShaderiv(gears->fragShader, GL_COMPILE_STATUS, &params);
+  glCompileShader(fragShader);
+  glGetShaderiv(fragShader, GL_COMPILE_STATUS, &params);
   if (!params) {
-    glGetShaderiv(gears->fragShader, GL_INFO_LOG_LENGTH, &params);
+    glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &params);
     log = calloc(1, params);
     if (!log) {
       printf("calloc log failed\n");
       goto out;
     }
-    glGetShaderInfoLog(gears->fragShader, params, NULL, log);
+    glGetShaderInfoLog(fragShader, params, NULL, log);
     printf("glCompileShader fragment failed: %s", log);
     free(log);
     goto out;
   }
 
-  glAttachShader(gears->program, gears->fragShader);
+  glAttachShader(gears->program, fragShader);
 
   /* link and use program */
 
-  glBindAttribLocation(gears->program, 0, "a_Vertex");
+  glBindAttribLocation(gears->program, 0, "a_Position");
   glBindAttribLocation(gears->program, 1, "a_Normal");
   glBindAttribLocation(gears->program, 2, "a_TexCoord");
 
@@ -534,22 +511,29 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     goto out;
   }
 
-  glUseProgram(gears->program);
+  /* destory shaders */
 
-  /* Set u_LightPos */
-  LightPos_loc = glGetUniformLocation(gears->program, "u_LightPos");
-  glUniform4fv(LightPos_loc, 1, pos);
+  glDeleteShader(fragShader);
+  glDeleteShader(vertShader);
+  vertShader = fragShader = 0;
 
-  /* Set u_TextureFlag and u_Texture */
-  TextureFlag_loc = glGetUniformLocation(gears->program, "u_TextureFlag");
-  glUniform1i(TextureFlag_loc, getenv("NO_TEXTURE") ? 0 : 1);
-  Texture_loc = glGetUniformLocation(gears->program, "u_Texture");
-  glUniform1i(Texture_loc, 0);
+  /* load texture */
 
-  image_load(getenv("TEXTURE"), &gears->image);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gears->image.width, gears->image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, gears->image.pixel_data);
+  image_load(getenv("TEXTURE"), &image);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
+  image_unload(&image);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+  /* install program, set clear values, set viewport */
+
+  glUseProgram(gears->program);
+
+  glClearColor(0, 0, 0, 1);
+
+  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+
+  /* create gears */
 
   gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
   if (!gears->gear1) {
@@ -565,8 +549,6 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   if (!gears->gear3) {
     goto out;
   }
-
-  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
 
   memset(gears->Projection, 0, sizeof(gears->Projection));
   gears->Projection[0] = zNear;
@@ -587,14 +569,11 @@ out:
   if (gears->gear1) {
     delete_gear(gears->gear1);
   }
-  if (gears->image.pixel_data) {
-    image_unload(&gears->image);
+  if (fragShader) {
+    glDeleteShader(fragShader);
   }
-  if (gears->fragShader) {
-    glDeleteShader(gears->fragShader);
-  }
-  if (gears->vertShader) {
-    glDeleteShader(gears->vertShader);
+  if (vertShader) {
+    glDeleteShader(vertShader);
   }
   if (gears->program) {
     glDeleteProgram(gears->program);
@@ -635,10 +614,9 @@ static void glesv2_gears_term(gears_t *gears)
   delete_gear(gears->gear1);
   delete_gear(gears->gear2);
   delete_gear(gears->gear3);
-  image_unload(&gears->image);
-  glDeleteShader(gears->fragShader);
-  glDeleteShader(gears->vertShader);
   glDeleteProgram(gears->program);
+
+  free(gears);
 
   printf("%s\n", glGetString(GL_VERSION));
   printf("%s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));

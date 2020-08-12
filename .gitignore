@@ -1,5 +1,6 @@
 aclocal.m4
 autom4te.cache
+build
 compile
 config.guess
 config.h
@@ -10,6 +11,8 @@ config.sub
 configure
 depcomp
 .deps
+frag.spv
+frag.xxd
 INSTALL
 install-sh
 .libs
@@ -19,9 +22,12 @@ Makefile
 Makefile.in
 missing
 stamp-h1
+vert.spv
+vert.xxd
 yagears
 yagears-gui
 yagears-mosaic
+yagears-vk
 *.la
 *.lo
 *.o
