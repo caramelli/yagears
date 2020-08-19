@@ -1,3 +1,15 @@
+commit 114758a5b61bbc1eb93c3980f6bcbd18280aec24
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed Aug 19 09:18:50 2020 +0200
+
+    add texture for Vulkan
+
+commit 3bc1420abbe735b4ed0fa3df92d7939c44fc2043
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed Aug 12 18:33:51 2020 +0200
+
+    update ChangeLog
+
 commit 0cd63117bd97706c96adf43a3ce604d72f860a69
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Wed Aug 12 18:33:37 2020 +0200
