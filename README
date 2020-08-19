@@ -11,6 +11,7 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple OpenGL Backends:
   - EGL interface for DirectFB
   - EGL interface for Linux Framebuffer
   - EGL interface for Wayland
+  - EGL interface for XCB
   - EGL interface for DRM
   - EGL interface for Raspberry Pi Dispmanx
 
@@ -32,6 +33,7 @@ The package also provides a Vulkan port that supports multiple Vulkan WSIs:
   - Vulkan extension for DirectFB (DirectFB WSI)
   - Vulkan extension for Linux Framebuffer (FBDev WSI)
   - Vulkan extension for Wayland (Wayland WSI)
+  - Vulkan extension for XCB (XCB WSI)
 
 Have fun,
 

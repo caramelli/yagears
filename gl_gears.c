@@ -192,9 +192,10 @@ out:
   return NULL;
 }
 
-static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color)
+static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+  struct gear *gear = NULL;
 
   glPushMatrix();
   glLoadIdentity();
@@ -213,13 +214,17 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
   else
     glEnable(GL_TEXTURE_2D);
 
+  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
+
   glCallList(gear->list);
 
   glPopMatrix();
 }
 
-static void delete_gear(struct gear *gear)
+static void delete_gear(gears_t *gears, int id)
 {
+  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
+
   glDeleteLists(gear->list, 1);
 
   free(gear);
@@ -230,7 +235,8 @@ static void delete_gear(struct gear *gear)
 static gears_t *gl_gears_init(int win_width, int win_height)
 {
   gears_t *gears = NULL;
-  image_t image;
+  int texture_width, texture_height;
+  void *texture_data = NULL;
   const GLdouble zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
@@ -246,9 +252,20 @@ static gears_t *gl_gears_init(int win_width, int win_height)
 
   /* load texture */
 
-  image_load(getenv("TEXTURE"), &image);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
-  image_unload(&image);
+  image_load(getenv("TEXTURE"), NULL, &texture_width, &texture_height);
+
+  texture_data = malloc(texture_width * texture_height * 4);
+  if (!texture_data) {
+    printf("malloc texture_data failed\n");
+    goto out;
+  }
+
+  image_load(getenv("TEXTURE"), texture_data, &texture_width, &texture_height);
+
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture_width, texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data);
+
+  free(texture_data);
+
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
@@ -286,13 +303,13 @@ static gears_t *gl_gears_init(int win_width, int win_height)
 
 out:
   if (gears->gear3) {
-    delete_gear(gears->gear3);
+    delete_gear(gears, 3);
   }
   if (gears->gear2) {
-    delete_gear(gears->gear2);
+    delete_gear(gears, 2);
   }
   if (gears->gear1) {
-    delete_gear(gears->gear1);
+    delete_gear(gears, 1);
   }
   free(gears);
   return NULL;
@@ -300,9 +317,9 @@ out:
 
 static void gl_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, float model_rz)
 {
-  const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
-  const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
-  const GLfloat blue[4] = { 0.2, 0.2, 1.0, 1.0 };
+  const float red[4] = { 0.8, 0.1, 0.0, 1.0 };
+  const float green[4] = { 0.0, 0.8, 0.2, 1.0 };
+  const float blue[4] = { 0.2, 0.2, 1.0, 1.0 };
 
   if (!gears) {
     return;
@@ -315,9 +332,9 @@ static void gl_gears_draw(gears_t *gears, float view_tz, float view_rx, float vi
   glRotatef((GLfloat)view_rx, 1, 0, 0);
   glRotatef((GLfloat)view_ry, 0, 1, 0);
 
-  draw_gear(gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red);
-  draw_gear(gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green);
-  draw_gear(gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue);
+  draw_gear(gears, 1, -3.0, -2.0,      model_rz     , red);
+  draw_gear(gears, 2,  3.1, -2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, 3, -3.1,  4.2, -2 * model_rz - 25, blue);
 }
 
 static void gl_gears_term(gears_t *gears)
@@ -326,9 +343,9 @@ static void gl_gears_term(gears_t *gears)
     return;
   }
 
-  delete_gear(gears->gear1);
-  delete_gear(gears->gear2);
-  delete_gear(gears->gear3);
+  delete_gear(gears, 1);
+  delete_gear(gears, 2);
+  delete_gear(gears, 3);
 
   printf("%s\n", glGetString(GL_VERSION));
 

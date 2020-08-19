@@ -5,7 +5,7 @@ layout(binding = 0) uniform u {
   mat4 u_ModelViewProjectionMatrix;
   mat4 u_NormalMatrix;
   vec4 u_Color;
-  int u_TextureFlag;
+  int u_TextureEnable;
 };
 layout(binding = 1) uniform sampler2D u_Texture;
 layout(location = 0) in vec4 v_Color;
@@ -14,7 +14,7 @@ layout(location = 0) out vec4 FragColor;
 
 void main()
 {
-  if (u_TextureFlag == 1) {
+  if (u_TextureEnable == 1) {
     vec4 t = texture(u_Texture, v_TexCoord);
     if (t.a == 0.0)
       FragColor = v_Color;

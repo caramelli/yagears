@@ -58,6 +58,9 @@
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
+#if defined(EGL_XCB)
+#include <xcb/xcb.h>
+#endif
 #if defined(EGL_DRM)
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -118,7 +121,7 @@ struct __DRIimageExtensionRec {
 #include <termios.h>
 #include <bcm_host.h>
 #endif
-#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
 #include <EGL/egl.h>
 #endif
 
@@ -484,6 +487,58 @@ static void wl_registry_handle_global_remove(void *data, struct wl_registry *reg
 static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_global, wl_registry_handle_global_remove };
 #endif
 
+#if defined(EGL_XCB)
+static void xcb_keyboard_handle_key(xcb_generic_event_t *event)
+{
+  switch (((xcb_key_press_event_t *)event)->detail) {
+    case 0x09:
+      sighandler(SIGTERM);
+      return;
+    case 0x41:
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case 0x75:
+      view_tz -= -5.0;
+      break;
+    case 0x70:
+      view_tz += -5.0;
+      break;
+    case 0x74:
+      view_rx -= 5.0;
+      break;
+    case 0x6f:
+      view_rx += 5.0;
+      break;
+    case 0x72:
+      view_ry -= 5.0;
+      break;
+    case 0x71:
+      view_ry += 5.0;
+      break;
+    case 0x1c:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+}
+#endif
+
 #if defined(EGL_DRM)
 #define drm_display gbm_device
 #define drm_surface gbm_surface
@@ -774,6 +829,14 @@ int main(int argc, char *argv[])
   struct wl_surface *wl_surface = NULL;
   struct wl_shell_surface *wl_shell_surface = NULL;
   #endif
+  #if defined(EGL_XCB)
+  xcb_connection_t *xcb_dpy = NULL;
+  xcb_window_t xcb_win = -1;
+  xcb_void_cookie_t xcb_cookie;
+  uint32_t xcb_value_list[2];
+  xcb_event_mask_t xcb_event_mask = XCB_EVENT_MASK_NO_EVENT;
+  xcb_generic_event_t *xcb_event = NULL;
+  #endif
   #if defined(EGL_DRM)
   struct drm_display *drm_dpy = NULL;
   struct drm_surface *drm_win = NULL;
@@ -804,7 +867,7 @@ int main(int argc, char *argv[])
   int rpi_fdflags = -1;
   char rpi_event[5];
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
   EGLint egl_config_attr[16];
@@ -838,6 +901,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_WAYLAND)
   strcat(backends, "egl-wayland ");
+  #endif
+  #if defined(EGL_XCB)
+  strcat(backends, "egl-xcb ");
   #endif
   #if defined(EGL_DRM)
   strcat(backends, "egl-drm ");
@@ -1021,6 +1087,18 @@ int main(int argc, char *argv[])
     win_height = wl_data.height;
   }
   #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    xcb_dpy = xcb_connect(NULL, NULL);
+    if (xcb_connection_has_error(xcb_dpy)) {
+      printf("xcb_connect failed\n");
+      goto out;
+    }
+
+    win_width = xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->width_in_pixels;
+    win_height = xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->height_in_pixels;
+  }
+  #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     if (getenv("DRICARD")) {
@@ -1180,13 +1258,19 @@ int main(int argc, char *argv[])
   #if defined(EGL_FBDEV)
   if (!strcmp(backend, "egl-fbdev")) {
     setenv("EGL_PLATFORM", "fbdev", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)fb_dpy);
+    egl_dpy = eglGetDisplay((EGLNativeDisplayType)(long)fb_dpy);
   }
   #endif
   #if defined(EGL_WAYLAND)
   if (!strcmp(backend, "egl-wayland")) {
     setenv("EGL_PLATFORM", "wayland", 1);
     egl_dpy = eglGetDisplay((EGLNativeDisplayType)wl_dpy);
+  }
+  #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    setenv("EGL_PLATFORM", "xcb", 1);
+    egl_dpy = eglGetDisplay((EGLNativeDisplayType)xcb_dpy);
   }
   #endif
   #if defined(EGL_DRM)
@@ -1200,8 +1284,8 @@ int main(int argc, char *argv[])
     egl_dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (!egl_dpy) {
       printf("eglGetDisplay failed: 0x%x\n", eglGetError());
       goto out;
@@ -1256,8 +1340,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     err = eglInitialize(egl_dpy, &egl_major_version, &egl_minor_version);
     if (!err) {
       printf("eglInitialize failed: 0x%x\n", eglGetError());
@@ -1437,6 +1521,26 @@ int main(int argc, char *argv[])
     }
   }
   #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    xcb_win = xcb_generate_id(xcb_dpy);
+    xcb_event_mask = XCB_EVENT_MASK_KEY_PRESS;
+    xcb_cookie = xcb_create_window_checked(xcb_dpy, XCB_COPY_FROM_PARENT, xcb_win, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root, win_posx, win_posy, win_width, win_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root_visual, XCB_CW_EVENT_MASK, &xcb_event_mask);
+    xcb_win = xcb_request_check(xcb_dpy, xcb_cookie) ? -1 : xcb_win;
+    if (xcb_win == -1) {
+      printf("xcb_create_window failed\n");
+      goto out;
+    }
+
+    xcb_map_window(xcb_dpy, xcb_win);
+
+    xcb_value_list[0] = win_posx;
+    xcb_value_list[1] = win_posy;
+    xcb_configure_window(xcb_dpy, xcb_win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, xcb_value_list);
+
+    xcb_flush(xcb_dpy);
+  }
+  #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     if (getenv("NO_GBM")) {
@@ -1575,6 +1679,11 @@ int main(int argc, char *argv[])
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)wl_win, NULL);
   }
   #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)(long)xcb_win, NULL);
+  }
+  #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
@@ -1585,8 +1694,8 @@ int main(int argc, char *argv[])
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)rpi_win, NULL);
   }
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (!egl_win) {
       printf("eglCreateWindowSurface failed: 0x%x\n", eglGetError());
       goto out;
@@ -1643,8 +1752,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     opt = 0;
     memset(egl_ctx_attr, 0, sizeof(egl_ctx_attr));
     if (gears_engine_version(gears_engine) == 2) {
@@ -1735,8 +1844,8 @@ int main(int argc, char *argv[])
       }
       #endif
 
-      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+      #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+      if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
         eglSwapBuffers(egl_dpy, egl_win);
       }
       #endif
@@ -1795,6 +1904,21 @@ int main(int argc, char *argv[])
       }
 
       wl_display_dispatch(wl_dpy);
+    }
+    #endif
+    #if defined(EGL_XCB)
+    if (!strcmp(backend, "egl-xcb")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
+      xcb_event = xcb_poll_for_event(xcb_dpy);
+      if (xcb_event) {
+        if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
+          xcb_keyboard_handle_key(xcb_event);
+          free(xcb_event);
+        }
+      }
     }
     #endif
     #if defined(EGL_DRM)
@@ -1888,8 +2012,8 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_DEPTH_SIZE, &egl_depth_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_RED_SIZE, &egl_red_size);
     eglGetConfigAttrib(egl_dpy, egl_config, EGL_GREEN_SIZE, &egl_green_size);
@@ -1905,8 +2029,8 @@ out:
 
   /* destroy context */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_ctx) {
       eglMakeCurrent(egl_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
       eglDestroyContext(egl_dpy, egl_ctx);
@@ -1941,8 +2065,8 @@ out:
 
   /* destroy window and close display */
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_DRM) || defined(EGL_RPI)
-  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_win) {
       eglDestroySurface(egl_dpy, egl_win);
     }
@@ -2089,6 +2213,22 @@ out:
 
     if (wl_dpy) {
       wl_display_disconnect(wl_dpy);
+    }
+  }
+  #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    if (xcb_event_mask) {
+      xcb_event_mask = XCB_EVENT_MASK_NO_EVENT;
+      xcb_change_window_attributes(xcb_dpy, xcb_win, XCB_CW_EVENT_MASK, &xcb_event_mask);
+    }
+
+    if (xcb_win != -1) {
+      xcb_destroy_window(xcb_dpy, xcb_win);
+    }
+
+    if (xcb_dpy) {
+      xcb_disconnect(xcb_dpy);
     }
   }
   #endif

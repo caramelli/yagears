@@ -8,7 +8,7 @@ layout(binding = 0) uniform u {
   mat4 u_ModelViewProjectionMatrix;
   mat4 u_NormalMatrix;
   vec4 u_Color;
-  int u_TextureFlag;
+  int u_TextureEnable;
 };
 layout(location = 0) out vec4 v_Color;
 layout(location = 1) out vec2 v_TexCoord;

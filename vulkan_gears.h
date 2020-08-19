@@ -25,4 +25,4 @@ typedef struct gears gears_t;
 
 gears_t *vk_gears_init(int, int, void *, void *);
 void vk_gears_draw(gears_t *, float, float, float, float, void *);
-void vk_gears_term(gears_t *, void *);
+void vk_gears_term(gears_t *);

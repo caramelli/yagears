@@ -52,6 +52,10 @@
 #include <xkbcommon/xkbcommon.h>
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
+#if defined(VK_XCB)
+#include <xcb/xcb.h>
+#define VK_USE_PLATFORM_XCB_KHR
+#endif
 #include <vulkan/vulkan.h>
 
 #include "vulkan_gears.h"
@@ -406,6 +410,58 @@ static void wl_registry_handle_global_remove(void *data, struct wl_registry *reg
 static struct wl_registry_listener wl_registry_listener = { wl_registry_handle_global, wl_registry_handle_global_remove };
 #endif
 
+#if defined(VK_XCB)
+static void xcb_keyboard_handle_key(xcb_generic_event_t *event)
+{
+  switch (((xcb_key_press_event_t *)event)->detail) {
+    case 0x09:
+      sighandler(SIGTERM);
+      return;
+    case 0x41:
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case 0x75:
+      view_tz -= -5.0;
+      break;
+    case 0x70:
+      view_tz += -5.0;
+      break;
+    case 0x74:
+      view_rx -= 5.0;
+      break;
+    case 0x6f:
+      view_rx += 5.0;
+      break;
+    case 0x72:
+      view_ry -= 5.0;
+      break;
+    case 0x71:
+      view_ry += 5.0;
+      break;
+    case 0x1c:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+}
+#endif
+
 /******************************************************************************/
 
 int main(int argc, char *argv[])
@@ -450,6 +506,15 @@ int main(int argc, char *argv[])
   struct wl_shell_surface *wl_shell_surface = NULL;
   VkWaylandSurfaceCreateInfoKHR wl_surface_create_info;
   #endif
+  #if defined(VK_XCB)
+  xcb_connection_t *xcb_dpy = NULL;
+  xcb_window_t xcb_win = -1;
+  xcb_void_cookie_t xcb_cookie;
+  uint32_t xcb_value_list[2];
+  xcb_event_mask_t xcb_event_mask = XCB_EVENT_MASK_NO_EVENT;
+  xcb_generic_event_t *xcb_event = NULL;
+  VkXcbSurfaceCreateInfoKHR xcb_surface_create_info;
+  #endif
   const char *vk_extension_name = NULL;
   VkInstance vk_instance = VK_NULL_HANDLE;
   VkInstanceCreateInfo vk_instance_create_info;
@@ -479,6 +544,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(VK_WAYLAND)
   strcat(wsis, "vk-wayland ");
+  #endif
+  #if defined(VK_XCB)
+  strcat(wsis, "vk-xcb ");
   #endif
 
   while ((opt = getopt(argc, argv, "w:h")) != -1) {
@@ -633,6 +701,18 @@ int main(int argc, char *argv[])
     win_height = wl_data.height;
   }
   #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    xcb_dpy = xcb_connect(NULL, NULL);
+    if (xcb_connection_has_error(xcb_dpy)) {
+      printf("xcb_connect failed\n");
+      goto out;
+    }
+
+    win_width = xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->width_in_pixels;
+    win_height = xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->height_in_pixels;
+  }
+  #endif
 
   if (getenv("WIDTH")) {
     win_width = atoi(getenv("WIDTH"));
@@ -670,6 +750,11 @@ int main(int argc, char *argv[])
   #if defined(VK_WAYLAND)
   if (!strcmp(wsi, "vk-wayland")) {
     vk_extension_name = VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    vk_extension_name = VK_KHR_XCB_SURFACE_EXTENSION_NAME;
   }
   #endif
   memset(&vk_instance_create_info, 0, sizeof(VkInstanceCreateInfo));
@@ -821,6 +906,26 @@ int main(int argc, char *argv[])
     }
   }
   #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    xcb_win = xcb_generate_id(xcb_dpy);
+    xcb_event_mask = XCB_EVENT_MASK_KEY_PRESS;
+    xcb_cookie = xcb_create_window_checked(xcb_dpy, XCB_COPY_FROM_PARENT, xcb_win, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root, win_posx, win_posy, win_width, win_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root_visual, XCB_CW_EVENT_MASK, &xcb_event_mask);
+    xcb_win = xcb_request_check(xcb_dpy, xcb_cookie) ? -1 : xcb_win;
+    if (xcb_win == -1) {
+      printf("xcb_create_window failed\n");
+      goto out;
+    }
+
+    xcb_map_window(xcb_dpy, xcb_win);
+
+    xcb_value_list[0] = win_posx;
+    xcb_value_list[1] = win_posy;
+    xcb_configure_window(xcb_dpy, xcb_win, XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, xcb_value_list);
+
+    xcb_flush(xcb_dpy);
+  }
+  #endif
 
   /* create surface */
 
@@ -868,6 +973,18 @@ int main(int argc, char *argv[])
     err = vkCreateWaylandSurfaceKHR(vk_instance, &wl_surface_create_info, NULL, &vk_surface);
     if (err) {
       printf("vkCreateWaylandSurfaceKHR failed: %d\n", err);
+      goto out;
+    }
+  }
+  #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    memset(&xcb_surface_create_info, 0, sizeof(VkXcbSurfaceCreateInfoKHR));
+    xcb_surface_create_info.connection = xcb_dpy;
+    xcb_surface_create_info.window = xcb_win;
+    err = vkCreateXcbSurfaceKHR(vk_instance, &xcb_surface_create_info, NULL, &vk_surface);
+    if (err) {
+      printf("vkCreateXcbSurfaceKHR failed: %d\n", err);
       goto out;
     }
   }
@@ -1025,9 +1142,24 @@ int main(int argc, char *argv[])
       wl_display_dispatch(wl_dpy);
     }
     #endif
+    #if defined(VK_XCB)
+    if (!strcmp(wsi, "vk-xcb")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
+      xcb_event = xcb_poll_for_event(xcb_dpy);
+      if (xcb_event) {
+        if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
+          xcb_keyboard_handle_key(xcb_event);
+          free(xcb_event);
+        }
+      }
+    }
+    #endif
   }
 
-  vk_gears_term(gears, vk_device);
+  vk_gears_term(gears);
 
   ret = EXIT_SUCCESS;
 
@@ -1158,6 +1290,22 @@ out:
 
     if (wl_dpy) {
       wl_display_disconnect(wl_dpy);
+    }
+  }
+  #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    if (xcb_event_mask) {
+      xcb_event_mask = XCB_EVENT_MASK_NO_EVENT;
+      xcb_change_window_attributes(xcb_dpy, xcb_win, XCB_CW_EVENT_MASK, &xcb_event_mask);
+    }
+
+    if (xcb_win != -1) {
+      xcb_destroy_window(xcb_dpy, xcb_win);
+    }
+
+    if (xcb_dpy) {
+      xcb_disconnect(xcb_dpy);
     }
   }
   #endif

@@ -31,6 +31,9 @@ option('egl-fbdev',
 option('egl-wayland',
         type: 'boolean',
         description: 'EGL interface for Wayland backend')
+option('egl-xcb',
+        type: 'boolean',
+        description: 'EGL interface for XCB backend')
 option('egl-drm',
         type: 'boolean',
         description: 'EGL interface for DRM backend')
@@ -50,6 +53,9 @@ option('vk-fbdev',
 option('vk-wayland',
         type: 'boolean',
         description: 'Vulkan extension for Wayland WSI')
+option('vk-xcb',
+        type: 'boolean',
+        description: 'Vulkan extension for XCB WSI')
 
 option('efl',
         type: 'boolean',

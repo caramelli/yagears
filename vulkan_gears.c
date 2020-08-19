@@ -127,7 +127,7 @@ struct Uniform {
   float ModelViewProjection[16];
   float NormalMatrix[16];
   float Color[4];
-  int TextureFlag;
+  int TextureEnable;
 };
 
 struct gear {
@@ -145,6 +145,7 @@ struct gear {
 };
 
 struct gears {
+  VkDevice device;
   VkImage colorImage;
   VkImage depthImage;
   VkImage textureImage;
@@ -165,9 +166,10 @@ struct gears {
   struct gear *gear2;
   struct gear *gear3;
   float Projection[16];
+  float View[16];
 };
 
-static struct gear *create_gear(gears_t *gears, float inner, float outer, float width, int teeth, float tooth_depth, VkDevice device)
+static struct gear *create_gear(gears_t *gears, float inner, float outer, float width, int teeth, float tooth_depth)
 {
   struct gear *gear;
   float r0, r1, r2, da, a1, ai, s[5], c[5];
@@ -343,12 +345,12 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   /* vertex buffer object */
 
   memset(&bufferCreateInfo, 0, sizeof(VkBufferCreateInfo));
-  vkCreateBuffer(device, &bufferCreateInfo, NULL, &gear->vbo);
+  vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->vbo);
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = gear->nvertices * sizeof(Vertex);
-  vkAllocateMemory(device, &memoryAllocateInfo, NULL, &gear->vboMemory);
-  vkMapMemory(device, gear->vboMemory, 0, gear->nvertices * sizeof(Vertex), 0, &gear->vbo_data);
-  vkBindBufferMemory(device, gear->vbo, gear->vboMemory, 0);
+  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->vboMemory);
+  vkMapMemory(gears->device, gear->vboMemory, 0, gear->nvertices * sizeof(Vertex), 0, &gear->vbo_data);
+  vkBindBufferMemory(gears->device, gear->vbo, gear->vboMemory, 0);
 
   vkCmdBindVertexBuffers(gears->commandBuffer, 0, 1, &gear->vbo, &offset);
 
@@ -357,18 +359,18 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   /* uniform buffer object */
 
   memset(&bufferCreateInfo, 0, sizeof(VkBufferCreateInfo));
-  vkCreateBuffer(device, &bufferCreateInfo, NULL, &gear->ubo);
+  vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->ubo);
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = sizeof(struct Uniform);
-  vkAllocateMemory(device, &memoryAllocateInfo, NULL, &gear->uboMemory);
-  vkMapMemory(device, gear->uboMemory, 0, sizeof(struct Uniform), 0, &gear->ubo_data);
-  vkBindBufferMemory(device, gear->ubo, gear->uboMemory, 0);
+  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->uboMemory);
+  vkMapMemory(gears->device, gear->uboMemory, 0, sizeof(struct Uniform), 0, &gear->ubo_data);
+  vkBindBufferMemory(gears->device, gear->ubo, gear->uboMemory, 0);
 
   memset(&descriptorSetAllocateInfo, 0, sizeof(VkDescriptorSetAllocateInfo));
   descriptorSetAllocateInfo.descriptorPool = gears->descriptorPool;
   descriptorSetAllocateInfo.descriptorSetCount = 1;
   descriptorSetAllocateInfo.pSetLayouts = &gears->descriptorSetLayout;
-  vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &gear->descriptorSet);
+  vkAllocateDescriptorSets(gears->device, &descriptorSetAllocateInfo, &gear->descriptorSet);
 
   memset(&writeDescriptorSet[0], 0, sizeof(VkWriteDescriptorSet));
   writeDescriptorSet[0].dstSet = gear->descriptorSet;
@@ -387,7 +389,7 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   descriptorImageInfo.sampler = gears->sampler;
   descriptorImageInfo.imageView = gears->texture;
   writeDescriptorSet[1].pImageInfo = &descriptorImageInfo;
-  vkUpdateDescriptorSets(device, 2, writeDescriptorSet, 0, NULL);
+  vkUpdateDescriptorSets(gears->device, 2, writeDescriptorSet, 0, NULL);
 
   vkCmdBindDescriptorSets(gears->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gears->pipelineLayout, 0, 1, &gear->descriptorSet, 0, NULL);
 
@@ -407,15 +409,16 @@ out:
   return NULL;
 }
 
-static void draw_gear(gears_t *gears, struct gear *gear, float model_tx, float model_ty, float model_rz, const float *color, float *View)
+static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
   const float pos[4] = { 5.0, -5.0, 10.0, 0.0 };
   float ModelView[16], ModelViewProjection[16];
   struct Uniform u;
+  struct gear *gear = NULL;
 
   memcpy(u.LightPos, pos, sizeof(pos));
 
-  memcpy(ModelView, View, sizeof(ModelView));
+  memcpy(ModelView, gears->View, sizeof(ModelView));
 
   translate(ModelView, model_tx, model_ty, 0);
   rotate(ModelView, model_rz, 0, 0, 1);
@@ -431,22 +434,26 @@ static void draw_gear(gears_t *gears, struct gear *gear, float model_tx, float m
   memcpy(u.Color, color, sizeof(u.Color));
 
   if (getenv("NO_TEXTURE"))
-    u.TextureFlag = 0;
+    u.TextureEnable = 0;
   else
-    u.TextureFlag = 1;
+    u.TextureEnable = 1;
+
+  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
 
   memcpy(gear->ubo_data, &u, sizeof(struct Uniform));
 }
 
-static void delete_gear(gears_t *gears, struct gear *gear, VkDevice device)
+static void delete_gear(gears_t *gears, int id)
 {
-  vkFreeDescriptorSets(device, gears->descriptorPool, 1, &gear->descriptorSet);
-  vkUnmapMemory(device, gear->uboMemory);
-  vkFreeMemory(device, gear->uboMemory, NULL);
-  vkDestroyBuffer(device, gear->ubo, NULL);
-  vkUnmapMemory(device, gear->vboMemory);
-  vkFreeMemory(device, gear->vboMemory, NULL);
-  vkDestroyBuffer(device, gear->vbo, NULL);
+  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
+
+  vkFreeDescriptorSets(gears->device, gears->descriptorPool, 1, &gear->descriptorSet);
+  vkUnmapMemory(gears->device, gear->uboMemory);
+  vkFreeMemory(gears->device, gear->uboMemory, NULL);
+  vkDestroyBuffer(gears->device, gear->ubo, NULL);
+  vkUnmapMemory(gears->device, gear->vboMemory);
+  vkFreeMemory(gears->device, gear->vboMemory, NULL);
+  vkDestroyBuffer(gears->device, gear->vbo, NULL);
   free(gear->strips);
   free(gear->vertices);
 
@@ -493,7 +500,7 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   VkPipelineColorBlendStateCreateInfo pipelineColorBlendStateCreateInfo;
   VkPipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo;
   VkDynamicState dynamicState[2];
-  image_t image;
+  int texture_width, texture_height;
   void *texture_data;
   VkSamplerCreateInfo samplerCreateInfo;
   VkCommandPoolCreateInfo commandPoolCreateInfo;
@@ -513,9 +520,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
     return NULL;
   }
 
+  gears->device = device;
+
   /* color attachment */
 
-  vkGetSwapchainImagesKHR(device, swapchain, &count, &gears->colorImage);
+  vkGetSwapchainImagesKHR(gears->device, swapchain, &count, &gears->colorImage);
 
   /* depth attachment */
 
@@ -527,15 +536,15 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageCreateInfo.mipLevels = 1;
   imageCreateInfo.arrayLayers = 1;
   imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  vkCreateImage(device, &imageCreateInfo, 0, &gears->depthImage);
+  vkCreateImage(gears->device, &imageCreateInfo, 0, &gears->depthImage);
 
   memset(&memoryRequirements, 0, sizeof(VkMemoryRequirements));
-  vkGetImageMemoryRequirements(device, gears->depthImage, &memoryRequirements);
+  vkGetImageMemoryRequirements(gears->device, gears->depthImage, &memoryRequirements);
 
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = memoryRequirements.size;
-  vkAllocateMemory(device, &memoryAllocateInfo, NULL, &gears->depthMemory);
-  vkBindImageMemory(device, gears->depthImage, gears->depthMemory, 0);
+  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->depthMemory);
+  vkBindImageMemory(gears->device, gears->depthImage, gears->depthMemory, 0);
 
   /* create framebuffer */
 
@@ -546,7 +555,7 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(device, &imageViewCreateInfo, NULL, &gears->imageView[0]);
+  vkCreateImageView(gears->device, &imageViewCreateInfo, NULL, &gears->imageView[0]);
 
   memset(&imageViewCreateInfo, 0, sizeof(VkImageViewCreateInfo));
   imageViewCreateInfo.image = gears->depthImage;
@@ -555,14 +564,14 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(device, &imageViewCreateInfo, 0, &gears->imageView[1]);
+  vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->imageView[1]);
 
   memset(&framebufferCreateInfo, 0, sizeof(VkFramebufferCreateInfo));
   framebufferCreateInfo.attachmentCount = 2;
   framebufferCreateInfo.pAttachments = gears->imageView;
   framebufferCreateInfo.width = win_width;
   framebufferCreateInfo.height = win_height;
-  vkCreateFramebuffer(device, &framebufferCreateInfo, NULL, &gears->framebuffer);
+  vkCreateFramebuffer(gears->device, &framebufferCreateInfo, NULL, &gears->framebuffer);
 
   /* create render pass */
 
@@ -585,21 +594,21 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   attachmentReference[1].attachment = 1;
   subpassDescription.pDepthStencilAttachment = &attachmentReference[1];
   renderPassCreateInfo.pSubpasses = &subpassDescription;
-  vkCreateRenderPass(device, &renderPassCreateInfo, NULL, &gears->renderPass);
+  vkCreateRenderPass(gears->device, &renderPassCreateInfo, NULL, &gears->renderPass);
 
   /* vertex shader */
 
   memset(&shaderModuleCreateInfo, 0, sizeof(VkShaderModuleCreateInfo));
   shaderModuleCreateInfo.codeSize = sizeof(vertShaderSource);
   shaderModuleCreateInfo.pCode = vertShaderSource;
-  vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &vertShaderModule);
+  vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &vertShaderModule);
 
   /* fragment shader */
 
   memset(&shaderModuleCreateInfo, 0, sizeof(VkShaderModuleCreateInfo));
   shaderModuleCreateInfo.codeSize = sizeof(fragShaderSource);
   shaderModuleCreateInfo.pCode = fragShaderSource;
-  vkCreateShaderModule(device, &shaderModuleCreateInfo, NULL, &fragShaderModule);
+  vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &fragShaderModule);
 
   /* create pipeline */
 
@@ -613,12 +622,12 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   descriptorSetLayoutBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   descriptorSetLayoutBinding[1].descriptorCount = 1;
   descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBinding;
-  vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &gears->descriptorSetLayout);
+  vkCreateDescriptorSetLayout(gears->device, &descriptorSetLayoutCreateInfo, NULL, &gears->descriptorSetLayout);
 
   memset(&pipelineLayoutCreateInfo, 0, sizeof(VkPipelineLayoutCreateInfo));
   pipelineLayoutCreateInfo.setLayoutCount = 1;
   pipelineLayoutCreateInfo.pSetLayouts = &gears->descriptorSetLayout;
-  vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, NULL, &gears->pipelineLayout);
+  vkCreatePipelineLayout(gears->device, &pipelineLayoutCreateInfo, NULL, &gears->pipelineLayout);
 
   memset(&graphicsPipelineCreateInfo, 0, sizeof(VkGraphicsPipelineCreateInfo));
   graphicsPipelineCreateInfo.stageCount = 2;
@@ -684,40 +693,38 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   graphicsPipelineCreateInfo.pDynamicState = &pipelineDynamicStateCreateInfo;
   graphicsPipelineCreateInfo.layout = gears->pipelineLayout;
   graphicsPipelineCreateInfo.renderPass = gears->renderPass;
-  vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, NULL, &gears->pipeline);
+  vkCreateGraphicsPipelines(gears->device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, NULL, &gears->pipeline);
 
   /* destory shaders */
 
-  vkDestroyShaderModule(device, fragShaderModule, NULL);
-  vkDestroyShaderModule(device, vertShaderModule, NULL);
+  vkDestroyShaderModule(gears->device, fragShaderModule, NULL);
+  vkDestroyShaderModule(gears->device, vertShaderModule, NULL);
   vertShaderModule = fragShaderModule = VK_NULL_HANDLE;
 
   /* load texture */
 
-  image_load(getenv("TEXTURE"), &image);
+  image_load(getenv("TEXTURE"), NULL, &texture_width, &texture_height);
 
   memset(&imageCreateInfo, 0, sizeof(VkImageCreateInfo));
   imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
   imageCreateInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-  imageCreateInfo.extent.width = image.width;
-  imageCreateInfo.extent.height = image.height;
+  imageCreateInfo.extent.width = texture_width;
+  imageCreateInfo.extent.height = texture_height;
   imageCreateInfo.mipLevels = 1;
   imageCreateInfo.arrayLayers = 1;
   imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  vkCreateImage(device, &imageCreateInfo, NULL, &gears->textureImage);
+  vkCreateImage(gears->device, &imageCreateInfo, NULL, &gears->textureImage);
 
   memset(&memoryRequirements, 0, sizeof(VkMemoryRequirements));
-  vkGetImageMemoryRequirements(device, gears->textureImage, &memoryRequirements);
+  vkGetImageMemoryRequirements(gears->device, gears->textureImage, &memoryRequirements);
 
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = memoryRequirements.size;
-  vkAllocateMemory(device, &memoryAllocateInfo, NULL, &gears->textureMemory);
-  vkMapMemory(device, gears->textureMemory, 0, memoryRequirements.size, 0, &texture_data);
-  vkBindImageMemory(device, gears->textureImage, gears->textureMemory, 0);
+  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->textureMemory);
+  vkMapMemory(gears->device, gears->textureMemory, 0, memoryRequirements.size, 0, &texture_data);
+  vkBindImageMemory(gears->device, gears->textureImage, gears->textureMemory, 0);
 
-  memcpy(texture_data, image.pixel_data, memoryRequirements.size);
-
-  image_unload(&image);
+  image_load(getenv("TEXTURE"), texture_data, &texture_width, &texture_height);
 
   memset(&imageViewCreateInfo, 0, sizeof(VkImageViewCreateInfo));
   imageViewCreateInfo.image = gears->textureImage;
@@ -726,20 +733,20 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(device, &imageViewCreateInfo, 0, &gears->texture);
+  vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->texture);
 
   memset(&samplerCreateInfo, 0, sizeof(VkSamplerCreateInfo));
-  vkCreateSampler(device, &samplerCreateInfo, NULL, &gears->sampler);
+  vkCreateSampler(gears->device, &samplerCreateInfo, NULL, &gears->sampler);
 
   /* command buffer submitted to queue, set clear values, set viewport */
 
   memset(&commandPoolCreateInfo, 0, sizeof(VkCommandPoolCreateInfo));
-  vkCreateCommandPool(device, &commandPoolCreateInfo, NULL, &gears->commandPool);
+  vkCreateCommandPool(gears->device, &commandPoolCreateInfo, NULL, &gears->commandPool);
 
   memset(&commandBufferAllocateInfo, 0, sizeof(VkCommandBufferAllocateInfo));
   commandBufferAllocateInfo.commandPool = gears->commandPool;
   commandBufferAllocateInfo.commandBufferCount = 1;
-  vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, &gears->commandBuffer);
+  vkAllocateCommandBuffers(gears->device, &commandBufferAllocateInfo, &gears->commandBuffer);
 
   memset(&commandBufferBeginInfo, 0, sizeof(VkCommandBufferBeginInfo));
   vkBeginCommandBuffer(gears->commandBuffer, &commandBufferBeginInfo);
@@ -779,21 +786,21 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   descriptorPoolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   descriptorPoolSize[1].descriptorCount = 3;
   descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSize;
-  vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &gears->descriptorPool);
+  vkCreateDescriptorPool(gears->device, &descriptorPoolCreateInfo, NULL, &gears->descriptorPool);
 
   /* create gears */
 
-  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7, device);
+  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7);
   if (!gears->gear1) {
     goto out;
   }
 
-  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7, device);
+  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7);
   if (!gears->gear2) {
     goto out;
   }
 
-  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7, device);
+  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7);
   if (!gears->gear3) {
     goto out;
   }
@@ -813,13 +820,13 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
 
 out:
   if (gears->gear3) {
-    delete_gear(gears, gears->gear3, device);
+    delete_gear(gears, 3);
   }
   if (gears->gear2) {
-    delete_gear(gears, gears->gear2, device);
+    delete_gear(gears, 2);
   }
   if (gears->gear1) {
-    delete_gear(gears, gears->gear1, device);
+    delete_gear(gears, 1);
   }
   free(gears);
   return NULL;
@@ -830,21 +837,20 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   const float red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const float green[4] = { 0.0, 0.8, 0.2, 1.0 };
   const float blue[4] = { 0.2, 0.2, 1.0, 1.0 };
-  float View[16];
   VkSubmitInfo submitInfo;
 
   if (!gears) {
     return;
   }
 
-  identity(View);
-  translate(View, 0, 0, view_tz);
-  rotate(View, view_rx, 1, 0, 0);
-  rotate(View, view_ry, 0, 1, 0);
+  identity(gears->View);
+  translate(gears->View, 0, 0, view_tz);
+  rotate(gears->View, view_rx, 1, 0, 0);
+  rotate(gears->View, view_ry, 0, 1, 0);
 
-  draw_gear(gears, gears->gear1, -3.0,  2.0,      model_rz     , red  , View);
-  draw_gear(gears, gears->gear2,  3.1,  2.0, -2 * model_rz - 9 , green, View);
-  draw_gear(gears, gears->gear3, -3.1, -4.2, -2 * model_rz - 25, blue , View);
+  draw_gear(gears, 1, -3.0,  2.0,      model_rz     , red);
+  draw_gear(gears, 2,  3.1,  2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, 3, -3.1, -4.2, -2 * model_rz - 25, blue);
 
   memset(&submitInfo, 0, sizeof(VkSubmitInfo));
   submitInfo.commandBufferCount = 1;
@@ -852,32 +858,32 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   vkQueueSubmit(queue, 1, &submitInfo, NULL);
 }
 
-void vk_gears_term(gears_t *gears, void *device)
+void vk_gears_term(gears_t *gears)
 {
   if (!gears) {
     return;
   }
 
-  delete_gear(gears, gears->gear1, device);
-  delete_gear(gears, gears->gear2, device);
-  delete_gear(gears, gears->gear3, device);
-  vkDestroyDescriptorPool(device, gears->descriptorPool, NULL);
-  vkFreeCommandBuffers(device, gears->commandPool, 1, &gears->commandBuffer);
-  vkDestroyCommandPool(device, gears->commandPool, NULL);
-  vkDestroySampler(device, gears->sampler, NULL);
-  vkDestroyImageView(device, gears->texture, NULL);
-  vkUnmapMemory(device, gears->textureMemory);
-  vkFreeMemory(device, gears->textureMemory, NULL);
-  vkDestroyImage(device, gears->textureImage, NULL);
-  vkDestroyPipeline(device, gears->pipeline, NULL);
-  vkDestroyPipelineLayout(device, gears->pipelineLayout, NULL);
-  vkDestroyDescriptorSetLayout(device, gears->descriptorSetLayout, NULL);
-  vkDestroyRenderPass(device, gears->renderPass, NULL);
-  vkDestroyFramebuffer(device, gears->framebuffer, NULL);
-  vkDestroyImageView(device, gears->imageView[1], NULL);
-  vkDestroyImageView(device, gears->imageView[0], NULL);
-  vkFreeMemory(device, gears->depthMemory, NULL);
-  vkDestroyImage(device, gears->depthImage, NULL);
+  delete_gear(gears, 1);
+  delete_gear(gears, 2);
+  delete_gear(gears, 3);
+  vkDestroyDescriptorPool(gears->device, gears->descriptorPool, NULL);
+  vkFreeCommandBuffers(gears->device, gears->commandPool, 1, &gears->commandBuffer);
+  vkDestroyCommandPool(gears->device, gears->commandPool, NULL);
+  vkDestroySampler(gears->device, gears->sampler, NULL);
+  vkDestroyImageView(gears->device, gears->texture, NULL);
+  vkUnmapMemory(gears->device, gears->textureMemory);
+  vkFreeMemory(gears->device, gears->textureMemory, NULL);
+  vkDestroyImage(gears->device, gears->textureImage, NULL);
+  vkDestroyPipeline(gears->device, gears->pipeline, NULL);
+  vkDestroyPipelineLayout(gears->device, gears->pipelineLayout, NULL);
+  vkDestroyDescriptorSetLayout(gears->device, gears->descriptorSetLayout, NULL);
+  vkDestroyRenderPass(gears->device, gears->renderPass, NULL);
+  vkDestroyFramebuffer(gears->device, gears->framebuffer, NULL);
+  vkDestroyImageView(gears->device, gears->imageView[1], NULL);
+  vkDestroyImageView(gears->device, gears->imageView[0], NULL);
+  vkFreeMemory(gears->device, gears->depthMemory, NULL);
+  vkDestroyImage(gears->device, gears->depthImage, NULL);
 
   free(gears);
 }

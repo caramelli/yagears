@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.1)
+AC_INIT(yagears, 2.2)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -45,6 +45,9 @@ AC_ARG_ENABLE(egl-fbdev,
 AC_ARG_ENABLE(egl-wayland,
               AS_HELP_STRING(--disable-egl-wayland, disable EGL interface for Wayland backend),
               enable_egl_wayland=no, enable_egl_wayland=yes)
+AC_ARG_ENABLE(egl-xcb,
+              AS_HELP_STRING(--disable-egl-xcb, disable EGL interface for XCB backend),
+              enable_egl_xcb=no, enable_egl_xcb=yes)
 AC_ARG_ENABLE(egl-drm,
               AS_HELP_STRING(--disable-egl-drm, disable EGL interface for DRM backend),
               enable_egl_drm=no, enable_egl_drm=yes)
@@ -64,6 +67,9 @@ AC_ARG_ENABLE(vk-fbdev,
 AC_ARG_ENABLE(vk-wayland,
               AS_HELP_STRING(--disable-vk-wayland, disable Vulkan extension for Wayland WSI),
               enable_vk_wayland=no, enable_vk_wayland=yes)
+AC_ARG_ENABLE(vk-xcb,
+              AS_HELP_STRING(--disable-vk-xcb, disable Vulkan extension for XCB WSI),
+              enable_vk_xcb=no, enable_vk_xcb=yes)
 
 AC_ARG_ENABLE(efl,
               AS_HELP_STRING(--disable-efl, disable EFL GUI toolkit),
@@ -208,9 +214,10 @@ if test x$enable_gl_fbdev = xyes; then
   AC_DEFINE(GL_FBDEV, , Support for GLFBDev)
 fi
 
-if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_fbdev = xyes -o x$enable_egl_wayland = xyes -o x$enable_egl_drm -o x$enable_egl_rpi; then
+if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_fbdev = xyes -o x$enable_egl_wayland = xyes -o x$enable_egl_xcb = xyes -o x$enable_egl_drm -o x$enable_egl_rpi; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
+    EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_X11"
     if test x$enable_egl_x11 = xyes; then
       if test x$enable_gl_x11 = xno; then
         PKG_CHECK_MODULES(X11, x11, , enable_egl_x11=no)
@@ -237,6 +244,10 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
       fi
     fi
 
+    if test x$enable_egl_xcb = xyes; then
+      PKG_CHECK_MODULES(XCB, xcb, , enable_egl_xcb=no)
+    fi
+
     if test x$enable_egl_drm = xyes; then
       PKG_CHECK_MODULES(DRM, gbm libdrm libevdev, , enable_egl_drm=no)
       if test x$enable_egl_drm = xyes; then
@@ -253,6 +264,7 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
     enable_egl_directfb=no
     enable_egl_fbdev=no
     enable_egl_wayland=no
+    enable_egl_xcb=no
     enable_egl_drm=no
     enable_egl_rpi=no
   fi
@@ -269,6 +281,9 @@ fi
 if test x$enable_egl_wayland = xyes; then
   AC_DEFINE(EGL_WAYLAND, , Support for EGL with Wayland platform)
 fi
+if test x$enable_egl_xcb = xyes; then
+  AC_DEFINE(EGL_XCB, , Support for EGL with XCB platform)
+fi
 if test x$enable_egl_drm = xyes; then
   AC_DEFINE(EGL_DRM, , Support for EGL with DRM platform)
 fi
@@ -276,13 +291,13 @@ if test x$enable_egl_rpi = xyes; then
   AC_DEFINE(EGL_RPI, , Support for EGL with Raspberry Pi Dispmanx platform)
 fi
 
-if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a x$enable_egl_wayland = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno; then
+if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a x$enable_egl_wayland = xno -a x$enable_egl_xcb = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno; then
   AC_MSG_ERROR(No OpenGL Backends found)
 fi
 
 # Vulkan WSIs
 
-if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes; then
+if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes; then
   PKG_CHECK_MODULES(VULKAN, vulkan, enable_vulkan=yes, enable_vulkan=no)
   AC_PATH_TOOL(GLSLANG_VALIDATOR, glslangValidator)
   if test x$enable_vulkan = xyes -a -n "$GLSLANG_VALIDATOR"; then
@@ -328,12 +343,22 @@ if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbd
       fi
     fi
 
+    if test x$enable_vk_xcb = xyes; then
+      AC_CHECK_LIB(vulkan, vkCreateXcbSurfaceKHR, , enable_vk_xcb=no)
+      if test x$enable_vk_xcb = xyes; then
+        if test x$enable_egl_xcb = xno; then
+          PKG_CHECK_MODULES(XCB, xcb, , enable_vk_xcb=no)
+        fi
+      fi
+    fi
+
     LIBS=$save_LIBS
   else
     enable_vk_x11=no
     enable_vk_directfb=no
     enable_vk_fbdev=no
     enable_vk_wayland=no
+    enable_vk_xcb=no
   fi
 fi
 if test x$enable_vk_x11 = xyes; then
@@ -348,8 +373,11 @@ fi
 if test x$enable_vk_wayland = xyes; then
   AC_DEFINE(VK_WAYLAND, , Support for Wayland WSI)
 fi
+if test x$enable_vk_xcb = xyes; then
+  AC_DEFINE(VK_XCB, , Support for XCB WSI)
+fi
 
-if test x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev = xno -a x$enable_vk_wayland = xno; then
+if test x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev = xno -a x$enable_vk_wayland = xno -a x$enable_vk_xcb = xno; then
   AC_MSG_WARN(No Vulkan WSIs found)
 fi
 
@@ -506,6 +534,7 @@ echo "     EGL interface for Xlib         $enable_egl_x11"
 echo "     EGL interface for DirectFB     $enable_egl_directfb"
 echo "     EGL interface for Linux FBDev  $enable_egl_fbdev"
 echo "     EGL interface for Wayland      $enable_egl_wayland"
+echo "     EGL interface for XCB          $enable_egl_xcb"
 echo "     EGL interface for DRM          $enable_egl_drm"
 echo "     EGL interface for RPi Dispmanx $enable_egl_rpi"
 echo
@@ -517,6 +546,7 @@ echo "  Vulkan extension for Xlib         $enable_vk_x11"
 echo "  Vulkan extension for DirectFB     $enable_vk_directfb"
 echo "  Vulkan extension for Linux FBDev  $enable_vk_fbdev"
 echo "  Vulkan extension for Wayland      $enable_vk_wayland"
+echo "  Vulkan extension for XCB          $enable_vk_xcb"
 echo
 
 echo
@@ -539,7 +569,7 @@ AM_CONDITIONAL(GL, test x$enable_gl = xyes)
 AM_CONDITIONAL(GLESV1_CM, test x$enable_glesv1_cm = xyes)
 AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
 
-AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes)
+AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes)
 
 AM_CONDITIONAL(MOSAIC, test x$enable_glut = xyes)
 

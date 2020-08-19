@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.1')
+project('yagears', 'c', 'cpp', version: '2.2')
 
 config_h = configuration_data()
 
@@ -20,6 +20,7 @@ enable_egl_x11 = get_option('egl-x11')
 enable_egl_directfb = get_option('egl-directfb')
 enable_egl_fbdev = get_option('egl-fbdev')
 enable_egl_wayland = get_option('egl-wayland')
+enable_egl_xcb = get_option('egl-xcb')
 enable_egl_drm = get_option('egl-drm')
 enable_egl_rpi = get_option('egl-rpi')
 
@@ -27,6 +28,7 @@ enable_vk_x11 = get_option('vk-x11')
 enable_vk_directfb = get_option('vk-directfb')
 enable_vk_fbdev = get_option('vk-fbdev')
 enable_vk_wayland = get_option('vk-wayland')
+enable_vk_xcb = get_option('vk-xcb')
 
 enable_efl = get_option('efl')
 enable_fltk = get_option('fltk')
@@ -148,11 +150,13 @@ config_h.set('GL_FBDEV', enable_gl_fbdev, description: 'Support for GLFBDev')
 
 egl_dep = []
 wayland_dep = []
+xcb_dep = []
 drm_dep = []
 rpi_dep = []
-if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayland or enable_egl_drm or enable_egl_rpi
+if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayland or enable_egl_xcb or enable_egl_drm or enable_egl_rpi
   egl_dep = dependency('egl', required: false)
   if egl_dep.found()
+    egl_dep = declare_dependency(compile_args: '-DEGL_NO_X11', dependencies: egl_dep)
     if enable_egl_x11
       if not enable_gl_x11
         x11_dep = dependency('x11', required: false)
@@ -197,6 +201,13 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
       endif
     endif
 
+    if enable_egl_xcb
+      xcb_dep = dependency('xcb', required: false)
+      if not xcb_dep.found()
+        enable_egl_xcb = false
+      endif
+    endif
+
     if enable_egl_drm
       drm_dep = [dependency('gbm', required: false), dependency('libdrm', required: false), dependency('libevdev', required: false)]
       foreach dep : drm_dep
@@ -220,6 +231,7 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
     enable_egl_directfb = false
     enable_egl_fbdev = false
     enable_egl_wayland = false
+    enable_egl_xcb = false
     enable_egl_drm = false
     enable_egl_rpi = false
   endif
@@ -228,17 +240,18 @@ config_h.set('EGL_X11', enable_egl_x11, description: 'Support for EGL with Xlib 
 config_h.set('EGL_DIRECTFB', enable_egl_directfb, description: 'Support for EGL with DirectFB platform')
 config_h.set('EGL_FBDEV', enable_egl_fbdev, description: 'Support for EGL with Linux FBDev platform')
 config_h.set('EGL_WAYLAND', enable_egl_wayland, description: 'Support for EGL with Wayland platform')
+config_h.set('EGL_XCB', enable_egl_xcb, description: 'Support for EGL with XCB platform')
 config_h.set('EGL_DRM', enable_egl_drm, description: 'Support for EGL with DRM platform')
 config_h.set('EGL_RPI', enable_egl_rpi, description: 'Support for EGL with Raspberry Pi Dispmanx platform')
 
-if not enable_gl_x11 and not enable_gl_directfb and not enable_gl_fbdev and not enable_egl_x11 and not enable_egl_directfb and not enable_egl_fbdev and not enable_egl_wayland and not enable_egl_drm and not enable_egl_rpi
+if not enable_gl_x11 and not enable_gl_directfb and not enable_gl_fbdev and not enable_egl_x11 and not enable_egl_directfb and not enable_egl_fbdev and not enable_egl_wayland and not enable_egl_xcb and not enable_egl_drm and not enable_egl_rpi
   error('No OpenGL Backends found')
 endif
 
 # Vulkan WSIs
 
 vulkan_dep = []
-if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland
+if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb
   vulkan_dep = dependency('vulkan', required: false)
   glslang_validator = find_program('glslangValidator', required: false)
   if vulkan_dep.found() and glslang_validator.found()
@@ -307,19 +320,34 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland
         enable_vk_wayland = false
       endif
     endif
+
+    if enable_vk_xcb
+      if cc.has_function('vkCreateXcbSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+        if not enable_egl_xcb
+          xcb_dep = dependency('xcb', required: false)
+          if not xcb_dep.found()
+            enable_vk_xcb = false
+          endif
+        endif
+      else
+        enable_vk_xcb = false
+      endif
+    endif
   else
     enable_vk_x11 = false
     enable_vk_directfb = false
     enable_vk_fbdev = false
     enable_vk_wayland = false
+    enable_vk_xcb = false
   endif
 endif
 config_h.set('VK_X11', enable_vk_x11, description: 'Support for Xlib WSI')
 config_h.set('VK_DIRECTFB', enable_vk_directfb , description: 'Support for DirectFB WSI')
 config_h.set('VK_FBDEV', enable_vk_fbdev, description: 'Support for FBDev WSI')
 config_h.set('VK_WAYLAND', enable_vk_wayland, description: 'Support for Wayland WSI')
+config_h.set('VK_XCB', enable_vk_xcb, description: 'Support for XCB WSI')
 
-if not enable_vk_x11 and not enable_vk_directfb and not enable_vk_fbdev and not enable_vk_wayland
+if not enable_vk_x11 and not enable_vk_directfb and not enable_vk_fbdev and not enable_vk_wayland and not enable_vk_xcb
   warning('No Vulkan WSIs found')
 endif
 
@@ -506,6 +534,7 @@ message('     EGL interface for Xlib         @0@'.format(enable_egl_x11))
 message('     EGL interface for DirectFB     @0@'.format(enable_egl_directfb))
 message('     EGL interface for Linux FBDev  @0@'.format(enable_egl_fbdev))
 message('     EGL interface for Wayland      @0@'.format(enable_egl_wayland))
+message('     EGL interface for XCB          @0@'.format(enable_egl_xcb))
 message('     EGL interface for DRM          @0@'.format(enable_egl_drm))
 message('     EGL interface for RPi Dispmanx @0@'.format(enable_egl_rpi))
 message('')
@@ -517,6 +546,7 @@ message('  Vulkan extension for Xlib         @0@'.format(enable_vk_x11))
 message('  Vulkan extension for DirectFB     @0@'.format(enable_vk_directfb))
 message('  Vulkan extension for Linux FBDev  @0@'.format(enable_vk_fbdev))
 message('  Vulkan extension for Wayland      @0@'.format(enable_vk_wayland))
+message('  Vulkan extension for XCB          @0@'.format(enable_vk_xcb))
 message('')
 
 message('')
@@ -539,7 +569,7 @@ GL = enable_gl
 GLESV1_CM = enable_glesv1_cm
 GLESV2 = enable_glesv2
 
-if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland
+if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb
   VK = true
 else
   VK = false
@@ -592,7 +622,7 @@ libyagears2 = static_library('yagears2',
 
 executable('yagears2',
            'main.c',
-           dependencies: [egl_dep, x11_dep, directfb_dep, wayland_dep, drm_dep, rpi_dep],
+           dependencies: [egl_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep, drm_dep, rpi_dep],
            link_whole: libyagears2,
            install: true)
 
@@ -602,7 +632,7 @@ spirv_files = glslang_validator_gen.process('vulkan_gears.vert', 'vulkan_gears.f
 
 executable('yagears2-vk',
            'vk.c', 'vulkan_gears.c', spirv_files, 'image_loader.c', png_source, tiff_source,
-           dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep],
+           dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep],
            install: true)
 endif
 

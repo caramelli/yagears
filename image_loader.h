@@ -21,11 +21,4 @@
   THE SOFTWARE.
 */
 
-typedef struct {
-  int width;
-  int height;
-  unsigned char *pixel_data;
-} image_t;
-
-void image_load(char *filename, image_t *image);
-void image_unload(image_t *image);
+void image_load(char *filename, unsigned char *image_data, int *image_width, int *image_height);

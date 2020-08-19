@@ -173,6 +173,7 @@ struct gears {
   struct gear *gear2;
   struct gear *gear3;
   GLfloat Projection[16];
+  GLfloat View[16];
 };
 
 static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
@@ -366,21 +367,18 @@ out:
   return NULL;
 }
 
-static void draw_gear(gears_t *gears, struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color, GLfloat *View)
+static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLfloat ModelView[16], ModelViewProjection[16];
-  GLint LightPos_loc;
-  GLint TextureFlag_loc;
-  GLint ModelViewProjection_loc;
-  GLint Normal_loc;
-  GLint Color_loc;
+  GLint LightPos_loc, ModelViewProjection_loc, Normal_loc, Color_loc, TextureEnable_loc;
   GLint k;
+  struct gear *gear = NULL;
 
   LightPos_loc = gears->glGetUniformLocation(gears->program, "u_LightPos");
   gears->glUniform4fv(LightPos_loc, 1, pos);
 
-  memcpy(ModelView, View, sizeof(ModelView));
+  memcpy(ModelView, gears->View, sizeof(ModelView));
 
   translate(ModelView, model_tx, model_ty, 0);
   rotate(ModelView, model_rz, 0, 0, 1);
@@ -398,11 +396,13 @@ static void draw_gear(gears_t *gears, struct gear *gear, GLfloat model_tx, GLflo
   Color_loc = gears->glGetUniformLocation(gears->program, "u_Color");
   gears->glUniform4fv(Color_loc, 1, color);
 
-  TextureFlag_loc = gears->glGetUniformLocation(gears->program, "u_TextureFlag");
+  TextureEnable_loc = gears->glGetUniformLocation(gears->program, "u_TextureEnable");
   if (getenv("NO_TEXTURE"))
-    gears->glUniform1i(TextureFlag_loc, 0);
+    gears->glUniform1i(TextureEnable_loc, 0);
   else
-    gears->glUniform1i(TextureFlag_loc, 1);
+    gears->glUniform1i(TextureEnable_loc, 1);
+
+  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
 
   gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
@@ -423,8 +423,10 @@ static void draw_gear(gears_t *gears, struct gear *gear, GLfloat model_tx, GLflo
   gears->glDisableVertexAttribArray(0);
 }
 
-static void delete_gear(gears_t *gears, struct gear *gear)
+static void delete_gear(gears_t *gears, int id)
 {
+  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
+
   gears->glDeleteBuffers(1, &gear->vbo);
   free(gear->strips);
   free(gear->vertices);
@@ -448,7 +450,8 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   GLchar *log;
   GLuint vertShader = 0;
   GLuint fragShader = 0;
-  image_t image;
+  int texture_width, texture_height;
+  void *texture_data = NULL;
   const GLfloat zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
@@ -596,9 +599,20 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
   /* load texture */
 
-  image_load(getenv("TEXTURE"), &image);
-  gears->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
-  image_unload(&image);
+  image_load(getenv("TEXTURE"), NULL, &texture_width, &texture_height);
+
+  texture_data = malloc(texture_width * texture_height * 4);
+  if (!texture_data) {
+    printf("malloc texture_data failed\n");
+    goto out;
+  }
+
+  image_load(getenv("TEXTURE"), texture_data, &texture_width, &texture_height);
+
+  gears->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture_width, texture_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_data);
+
+  free(texture_data);
+
   gears->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   gears->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -638,13 +652,13 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
 out:
   if (gears->gear3) {
-    delete_gear(gears, gears->gear3);
+    delete_gear(gears, 3);
   }
   if (gears->gear2) {
-    delete_gear(gears, gears->gear2);
+    delete_gear(gears, 2);
   }
   if (gears->gear1) {
-    delete_gear(gears, gears->gear1);
+    delete_gear(gears, 1);
   }
   if (fragShader) {
     gears->glDeleteShader(fragShader);
@@ -664,10 +678,9 @@ out:
 
 static void glesv2_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, float model_rz)
 {
-  const GLfloat red[4] = { 0.8, 0.1, 0.0, 1.0 };
-  const GLfloat green[4] = { 0.0, 0.8, 0.2, 1.0 };
-  const GLfloat blue[4] = { 0.2, 0.2, 1.0, 1.0 };
-  GLfloat View[16];
+  const float red[4] = { 0.8, 0.1, 0.0, 1.0 };
+  const float green[4] = { 0.0, 0.8, 0.2, 1.0 };
+  const float blue[4] = { 0.2, 0.2, 1.0, 1.0 };
 
   if (!gears) {
     return;
@@ -675,14 +688,14 @@ static void glesv2_gears_draw(gears_t *gears, float view_tz, float view_rx, floa
 
   gears->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  identity(View);
-  translate(View, 0, 0, (GLfloat)view_tz);
-  rotate(View, (GLfloat)view_rx, 1, 0, 0);
-  rotate(View, (GLfloat)view_ry, 0, 1, 0);
+  identity(gears->View);
+  translate(gears->View, 0, 0, (GLfloat)view_tz);
+  rotate(gears->View, (GLfloat)view_rx, 1, 0, 0);
+  rotate(gears->View, (GLfloat)view_ry, 0, 1, 0);
 
-  draw_gear(gears, gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red  , View);
-  draw_gear(gears, gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green, View);
-  draw_gear(gears, gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue , View);
+  draw_gear(gears, 1, -3.0, -2.0,      model_rz     , red);
+  draw_gear(gears, 2,  3.1, -2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, 3, -3.1,  4.2, -2 * model_rz - 25, blue);
 }
 
 static void glesv2_gears_term(gears_t *gears)
@@ -691,9 +704,9 @@ static void glesv2_gears_term(gears_t *gears)
     return;
   }
 
-  delete_gear(gears, gears->gear1);
-  delete_gear(gears, gears->gear2);
-  delete_gear(gears, gears->gear3);
+  delete_gear(gears, 1);
+  delete_gear(gears, 2);
+  delete_gear(gears, 3);
   gears->glDeleteProgram(gears->program);
 
   printf("%s\n", gears->glGetString(GL_VERSION));
