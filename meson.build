@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.0')
+project('yagears', 'c', 'cpp', version: '2.1')
 
 config_h = configuration_data()
 
@@ -52,15 +52,18 @@ if enable_gl
   gl_dep = dependency('gl', required: false)
   if gl_dep.found()
     if enable_glesv1_cm
-      gl_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GL/gl.h>', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
+      gl_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GL/gl.h>', '-DGLESV1_CM_LIB="libGL.so"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
     endif
     if enable_glesv2
       xxd = find_program('xxd', required: false)
       if xxd.found()
-        gl_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GL/gl.h>', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
+        gl_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GL/gl.h>', '-DGLESV2_LIB="libGL.so"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
       else
         enable_glesv2 = false
       endif
+    endif
+    if enable_glesv1_cm or enable_glesv2
+      gl_dep = declare_dependency(link_args: '-ldl', dependencies: gl_dep)
     endif
   else
     enable_gl = false
@@ -73,7 +76,8 @@ if not enable_gl
   if enable_glesv1_cm
     glesv1_cm_dep = dependency('glesv1_cm', required: false)
     if glesv1_cm_dep.found()
-      glesv1_cm_dep = declare_dependency(compile_args: '-DGLESV1_CM_H=<GLES/gl.h>', dependencies: glesv1_cm_dep)
+      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm').stdout().strip(' \n').split(' '))
+      glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
     else
       enable_glesv1_cm = false
     endif
@@ -83,7 +87,8 @@ if not enable_gl
     glesv2_dep = dependency('glesv2', required: false)
     xxd = find_program('xxd', required: false)
     if glesv2_dep.found() and xxd.found()
-      glesv2_dep = declare_dependency(compile_args: '-DGLESV2_H=<GLES2/gl2.h>', dependencies: glesv2_dep)
+      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2').stdout().strip(' \n').split(' '))
+      glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so"'], link_args: '-ldl', dependencies: glesv2_dep)
     else
       enable_glesv2 = false
     endif
@@ -596,8 +601,8 @@ glslang_validator_gen = generator(glslang_validator, output: '@PLAINNAME@', argu
 spirv_files = glslang_validator_gen.process('vulkan_gears.vert', 'vulkan_gears.frag')
 
 executable('yagears2-vk',
-           'vk.c', 'vulkan_gears.c', spirv_files,
-           dependencies: [vulkan_dep, x11_dep, directfb_dep, wayland_dep],
+           'vk.c', 'vulkan_gears.c', spirv_files, 'image_loader.c', png_source, tiff_source,
+           dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep],
            install: true)
 endif
 

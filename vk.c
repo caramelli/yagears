@@ -114,6 +114,14 @@ static void x11_keyboard_handle_key(XEvent *event)
     case XK_Left:
       view_ry += 5.0;
       break;
+    case XK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -157,6 +165,14 @@ static void dfb_keyboard_handle_key(DFBWindowEvent *event)
       break;
     case DIKS_CURSOR_LEFT:
       view_ry += 5.0;
+      break;
+    case DIKS_SMALL_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -208,6 +224,14 @@ static void fb_keyboard_handle_key(struct input_event *event)
       break;
     case KEY_LEFT:
       view_ry += 5.0;
+      break;
+    case KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -318,6 +342,14 @@ static void wl_keyboard_handle_key(void *data, struct wl_keyboard *keyboard, uns
     case XKB_KEY_Left:
       view_ry += 5.0;
       break;
+    case XKB_KEY_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -392,11 +424,11 @@ int main(int argc, char *argv[])
   #endif
   #if defined(VK_DIRECTFB)
   IDirectFB *dfb_dpy = NULL;
+  IDirectFBSurface *dfb_win = NULL;
   IDirectFBDisplayLayer *dfb_layer = NULL;
   DFBDisplayLayerConfig dfb_layer_config;
   DFBWindowDescription dfb_desc;
   IDirectFBWindow *dfb_window = NULL;
-  IDirectFBSurface *dfb_win = NULL;
   IDirectFBEventBuffer *dfb_event_buffer = NULL;
   DFBWindowEventType dfb_event_mask = DWET_ALL;
   DFBWindowEvent dfb_event;
@@ -404,17 +436,17 @@ int main(int argc, char *argv[])
   #endif
   #if defined(VK_FBDEV)
   int fb_dpy = -1;
+  struct fb_window *fb_win = NULL;
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
-  struct fb_window *fb_win = NULL;
   int fb_keyboard = -1;
   struct input_event fb_event;
   VkFBDevSurfaceCreateInfoEXT fb_surface_create_info;
   #endif
   #if defined(VK_WAYLAND)
   struct wl_display *wl_dpy = NULL;
-  struct wl_data wl_data;
   struct wl_surface *wl_win = NULL;
+  struct wl_data wl_data;
   struct wl_shell_surface *wl_shell_surface = NULL;
   VkWaylandSurfaceCreateInfoKHR wl_surface_create_info;
   #endif
@@ -776,11 +808,11 @@ int main(int argc, char *argv[])
       goto out;
     }
 
+    wl_shell_surface_set_toplevel(wl_shell_surface);
+
     #if defined(HAVE_WL_SHELL_SURFACE_SET_POSITION)
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
     #endif
-
-    wl_shell_surface_set_toplevel(wl_shell_surface);
 
     wl_data.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (!wl_data.xkb_context) {

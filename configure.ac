@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.0)
+AC_INIT(yagears, 2.1)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -119,15 +119,18 @@ if test x$enable_gl = xyes; then
   PKG_CHECK_MODULES(GL, gl, , enable_gl=no)
   if test x$enable_gl = xyes; then
     if test x$enable_glesv1_cm = xyes; then
-      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\> -DGL_GLEXT_PROTOTYPES"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\> -DGLESV1_CM_LIB=\\\"libGL.so\\\" -DGL_GLEXT_PROTOTYPES"
     fi
     if test x$enable_glesv2 = xyes; then
       AC_PATH_TOOL(XXD, xxd)
       if test -n "$XXD"; then
-        GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGL_GLEXT_PROTOTYPES"
+        GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGLESV2_LIB=\\\"libGL.so\\\" -DGL_GLEXT_PROTOTYPES"
       else
         enable_glesv2=no
       fi
+    fi
+    if test x$enable_glesv1_cm = xyes -o x$enable_glesv2 = xyes; then
+      GL_LIBS="$GL_LIBS -ldl"
     fi
   fi
 fi
@@ -136,7 +139,8 @@ if test x$enable_gl = xno; then
   if test x$enable_glesv1_cm = xyes; then
     PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, , enable_glesv1_cm=no)
     if test x$enable_glesv1_cm = xyes; then
-      GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\>"
+      GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\> -DGLESV1_CM_LIB=\\\"libGLESv1_CM.so\\\""
+      GLESV1_CM_LIBS=-ldl
     fi
   fi
 
@@ -145,7 +149,8 @@ if test x$enable_gl = xno; then
     if test x$enable_glesv2 = xyes; then
       AC_PATH_TOOL(XXD, xxd)
       if test -n "$XXD"; then
-        GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\>"
+        GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\> -DGLESV2_LIB=\\\"libGLESv2.so\\\""
+        GLESV2_LIBS=-ldl
       else
         enable_glesv2=no
       fi

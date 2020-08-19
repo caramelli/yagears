@@ -737,12 +737,12 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
   IDirectFB *dfb_dpy = NULL;
+  IDirectFBSurface *dfb_win = NULL;
   IDirectFBDisplayLayer *dfb_layer = NULL;
   DFBDisplayLayerConfig dfb_layer_config;
   DFBSurfaceCapabilities dfb_attr = DSCAPS_NONE;
   DFBWindowDescription dfb_desc;
   IDirectFBWindow *dfb_window = NULL;
-  IDirectFBSurface *dfb_win = NULL;
   IDirectFBEventBuffer *dfb_event_buffer = NULL;
   DFBWindowEventType dfb_event_mask = DWET_ALL;
   DFBWindowEvent dfb_event;
@@ -753,9 +753,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   int fb_dpy = -1;
+  struct fb_window *fb_win = NULL;
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
-  struct fb_window *fb_win = NULL;
   int fb_keyboard = -1;
   struct input_event fb_event;
   #endif
@@ -769,14 +769,15 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_WAYLAND)
   struct wl_display *wl_dpy = NULL;
+  struct wl_window *wl_win = NULL;
   struct wl_data wl_data;
   struct wl_surface *wl_surface = NULL;
   struct wl_shell_surface *wl_shell_surface = NULL;
-  struct wl_window *wl_win = NULL;
   #endif
   #if defined(EGL_DRM)
-  int drm_fd = -1;
   struct drm_display *drm_dpy = NULL;
+  struct drm_surface *drm_win = NULL;
+  int drm_fd = -1;
   char drm_driver_path[PATH_MAX];
   struct __DRIcoreExtensionRec **drm_driver_extensions = NULL;
   struct __DRIextensionRec *drm_extensions[] = { &image_loader_extension.base, NULL };
@@ -784,7 +785,6 @@ int main(int argc, char *argv[])
   drmModeConnectorPtr drm_connector = NULL;
   drmModeEncoderPtr drm_encoder = NULL;
   drmModeCrtcPtr drm_crtc = NULL;
-  struct drm_surface *drm_win = NULL;
   struct gbm_bo *drm_bo = NULL;
   uint32_t drm_fb_id = 0;
   drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
@@ -794,12 +794,12 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_RPI)
   DISPMANX_DISPLAY_HANDLE_T rpi_dpy = DISPMANX_NO_HANDLE;
+  EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
   DISPMANX_MODEINFO_T rpi_info;
   DISPMANX_UPDATE_HANDLE_T rpi_update = DISPMANX_NO_HANDLE;
   DISPMANX_ELEMENT_HANDLE_T rpi_element = DISPMANX_NO_HANDLE;
   VC_RECT_T rpi_dst_rect;
   VC_RECT_T rpi_src_rect;
-  EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
   struct termios *rpi_termios = NULL, rpi_termios_new;
   int rpi_fdflags = -1;
   char rpi_event[5];
@@ -1414,11 +1414,11 @@ int main(int argc, char *argv[])
       goto out;
     }
 
+    wl_shell_surface_set_toplevel(wl_shell_surface);
+
     #if defined(HAVE_WL_SHELL_SURFACE_SET_POSITION)
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
     #endif
-
-    wl_shell_surface_set_toplevel(wl_shell_surface);
 
     wl_win = calloc(1, sizeof(struct wl_window));
     if (!wl_win) {

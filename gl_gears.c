@@ -201,17 +201,17 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
   glLightfv(GL_LIGHT0, GL_POSITION, pos);
   glPopMatrix();
 
-  if (getenv("NO_TEXTURE"))
-    glDisable(GL_TEXTURE_2D);
-  else
-    glEnable(GL_TEXTURE_2D);
-
   glPushMatrix();
 
   glTranslatef(model_tx, model_ty, 0);
   glRotatef(model_rz, 0, 0, 1);
 
   glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE, color);
+
+  if (getenv("NO_TEXTURE"))
+    glDisable(GL_TEXTURE_2D);
+  else
+    glEnable(GL_TEXTURE_2D);
 
   glCallList(gear->list);
 
@@ -330,9 +330,9 @@ static void gl_gears_term(gears_t *gears)
   delete_gear(gears->gear2);
   delete_gear(gears->gear3);
 
-  free(gears);
-
   printf("%s\n", glGetString(GL_VERSION));
+
+  free(gears);
 }
 
 /******************************************************************************/

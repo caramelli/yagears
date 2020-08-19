@@ -22,6 +22,7 @@
 */
 
 #include GLESV2_H
+#include <dlfcn.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -133,6 +134,40 @@ struct gear {
 };
 
 struct gears {
+  void *lib_handle;
+  void (*glEnable)(GLenum);
+  GLuint (*glCreateProgram)();
+  GLuint (*glCreateShader)(GLenum);
+  void (*glShaderSource)(GLuint, GLsizei, const GLchar **, const GLint *);
+  void (*glCompileShader)(GLuint);
+  void (*glGetShaderiv)(GLuint, GLenum, GLint *);
+  void (*glGetShaderInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
+  void (*glAttachShader)(GLuint, GLuint);
+  void (*glBindAttribLocation)(GLuint, GLuint, const GLchar *);
+  void (*glLinkProgram)(GLuint);
+  void (*glGetProgramiv)(GLuint, GLenum, GLint *);
+  void (*glGetProgramInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
+  void (*glUseProgram)(GLuint);
+  int (*glGetUniformLocation)(GLuint, const GLchar *);
+  void (*glUniform4fv)(GLint, GLsizei, const GLfloat *);
+  void (*glUniform1i)(GLint, GLint);
+  void (*glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat *);
+  void (*glTexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *);
+  void (*glTexParameteri)(GLenum, GLenum, GLint);
+  void (*glClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
+  void (*glGenBuffers)(GLsizei, GLuint *);
+  void (*glBindBuffer)(GLenum, GLuint);
+  void (*glBufferData)(GLenum, GLsizeiptr, const GLvoid *, GLenum);
+  void (*glViewport)(GLint, GLint, GLsizei, GLsizei);
+  void (*glClear)(GLbitfield);
+  void (*glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const GLvoid *);
+  void (*glEnableVertexAttribArray)(GLuint);
+  void (*glDrawArrays)(GLenum, GLint, GLsizei);
+  void (*glDisableVertexAttribArray)(GLuint);
+  void (*glDeleteBuffers)(GLsizei, const GLuint *);
+  void (*glDeleteShader)(GLuint);
+  void (*glDeleteProgram)(GLuint);
+  const GLubyte *(*glGetString)(GLenum);
   GLuint program;
   struct gear *gear1;
   struct gear *gear2;
@@ -140,7 +175,7 @@ struct gears {
   GLfloat Projection[16];
 };
 
-static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
+static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
 {
   struct gear *gear;
   GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
@@ -308,15 +343,15 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
 
   /* vertex buffer object */
 
-  glGenBuffers(1, &gear->vbo);
+  gears->glGenBuffers(1, &gear->vbo);
   if (!gear->vbo) {
     printf("glGenBuffers failed\n");
     goto out;
   }
 
-  glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
+  gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
+  gears->glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
 
   return gear;
 
@@ -331,7 +366,7 @@ out:
   return NULL;
 }
 
-static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color, GLfloat *View, GLfloat *Projection, GLuint program)
+static void draw_gear(gears_t *gears, struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLfloat model_rz, const GLfloat *color, GLfloat *View)
 {
   const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
   GLfloat ModelView[16], ModelViewProjection[16];
@@ -342,55 +377,55 @@ static void draw_gear(struct gear *gear, GLfloat model_tx, GLfloat model_ty, GLf
   GLint Color_loc;
   GLint k;
 
-  LightPos_loc = glGetUniformLocation(program, "u_LightPos");
-  glUniform4fv(LightPos_loc, 1, pos);
-
-  TextureFlag_loc = glGetUniformLocation(program, "u_TextureFlag");
-  if (getenv("NO_TEXTURE"))
-    glUniform1i(TextureFlag_loc, 0);
-  else
-    glUniform1i(TextureFlag_loc, 1);
+  LightPos_loc = gears->glGetUniformLocation(gears->program, "u_LightPos");
+  gears->glUniform4fv(LightPos_loc, 1, pos);
 
   memcpy(ModelView, View, sizeof(ModelView));
 
   translate(ModelView, model_tx, model_ty, 0);
   rotate(ModelView, model_rz, 0, 0, 1);
 
-  memcpy(ModelViewProjection, Projection, sizeof(ModelViewProjection));
+  memcpy(ModelViewProjection, gears->Projection, sizeof(ModelViewProjection));
   multiply(ModelViewProjection, ModelView);
-  ModelViewProjection_loc = glGetUniformLocation(program, "u_ModelViewProjectionMatrix");
-  glUniformMatrix4fv(ModelViewProjection_loc, 1, GL_FALSE, ModelViewProjection);
+  ModelViewProjection_loc = gears->glGetUniformLocation(gears->program, "u_ModelViewProjectionMatrix");
+  gears->glUniformMatrix4fv(ModelViewProjection_loc, 1, GL_FALSE, ModelViewProjection);
 
   invert(ModelView);
   transpose(ModelView);
-  Normal_loc = glGetUniformLocation(program, "u_NormalMatrix");
-  glUniformMatrix4fv(Normal_loc, 1, GL_FALSE, ModelView);
+  Normal_loc = gears->glGetUniformLocation(gears->program, "u_NormalMatrix");
+  gears->glUniformMatrix4fv(Normal_loc, 1, GL_FALSE, ModelView);
 
-  Color_loc = glGetUniformLocation(program, "u_Color");
-  glUniform4fv(Color_loc, 1, color);
+  Color_loc = gears->glGetUniformLocation(gears->program, "u_Color");
+  gears->glUniform4fv(Color_loc, 1, color);
 
-  glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
+  TextureFlag_loc = gears->glGetUniformLocation(gears->program, "u_TextureFlag");
+  if (getenv("NO_TEXTURE"))
+    gears->glUniform1i(TextureFlag_loc, 0);
+  else
+    gears->glUniform1i(TextureFlag_loc, 1);
 
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 3);
-  glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 6);
+  gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glEnableVertexAttribArray(0);
-  glEnableVertexAttribArray(1);
-  glEnableVertexAttribArray(2);
+  gears->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
+  gears->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 3);
+  gears->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 6);
+
+  gears->glEnableVertexAttribArray(0);
+  gears->glEnableVertexAttribArray(1);
+  gears->glEnableVertexAttribArray(2);
 
   for (k = 0; k < gear->nstrips; k++) {
-    glDrawArrays(GL_TRIANGLE_STRIP, gear->strips[k].begin, gear->strips[k].count);
+    gears->glDrawArrays(GL_TRIANGLE_STRIP, gear->strips[k].begin, gear->strips[k].count);
   }
 
-  glDisableVertexAttribArray(2);
-  glDisableVertexAttribArray(1);
-  glDisableVertexAttribArray(0);
+  gears->glDisableVertexAttribArray(2);
+  gears->glDisableVertexAttribArray(1);
+  gears->glDisableVertexAttribArray(0);
 }
 
-static void delete_gear(struct gear *gear)
+static void delete_gear(gears_t *gears, struct gear *gear)
 {
-  glDeleteBuffers(1, &gear->vbo);
+  gears->glDeleteBuffers(1, &gear->vbo);
   free(gear->strips);
   free(gear->vertices);
 
@@ -422,9 +457,55 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     return NULL;
   }
 
-  glEnable(GL_DEPTH_TEST);
+  gears->lib_handle = dlopen(GLESV2_LIB, RTLD_LAZY);
+  if (!gears->lib_handle) {
+    printf("%s library not found\n", GLESV2_LIB);
+    goto out;
+  }
 
-  gears->program = glCreateProgram();
+  #define DLSYM(sym) gears->sym = dlsym(gears->lib_handle, #sym); \
+  if (!gears->sym) { \
+    printf("%s not found\n", #sym); \
+    goto out; \
+  }
+
+  DLSYM(glEnable);
+  DLSYM(glCreateProgram);
+  DLSYM(glCreateShader);
+  DLSYM(glShaderSource);
+  DLSYM(glCompileShader);
+  DLSYM(glGetShaderiv);
+  DLSYM(glGetShaderInfoLog);
+  DLSYM(glAttachShader);
+  DLSYM(glBindAttribLocation);
+  DLSYM(glLinkProgram);
+  DLSYM(glGetProgramiv);
+  DLSYM(glGetProgramInfoLog);
+  DLSYM(glUseProgram);
+  DLSYM(glGetUniformLocation);
+  DLSYM(glUniform4fv);
+  DLSYM(glUniform1i);
+  DLSYM(glUniformMatrix4fv);
+  DLSYM(glTexImage2D);
+  DLSYM(glTexParameteri);
+  DLSYM(glClearColor);
+  DLSYM(glGenBuffers);
+  DLSYM(glBindBuffer);
+  DLSYM(glBufferData);
+  DLSYM(glViewport);
+  DLSYM(glClear);
+  DLSYM(glVertexAttribPointer);
+  DLSYM(glEnableVertexAttribArray);
+  DLSYM(glDrawArrays);
+  DLSYM(glDisableVertexAttribArray);
+  DLSYM(glDeleteBuffers);
+  DLSYM(glDeleteShader);
+  DLSYM(glDeleteProgram);
+  DLSYM(glGetString);
+
+  gears->glEnable(GL_DEPTH_TEST);
+
+  gears->program = gears->glCreateProgram();
   if (!gears->program) {
     printf("glCreateProgram failed\n");
     goto out;
@@ -432,80 +513,76 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
   /* vertex shader */
 
-  vertShader = glCreateShader(GL_VERTEX_SHADER);
+  vertShader = gears->glCreateShader(GL_VERTEX_SHADER);
   if (!vertShader) {
     printf("glCreateShader vertex failed\n");
     goto out;
   }
 
   code = vertShaderSource;
-  glShaderSource(vertShader, 1, &code, NULL);
+  gears->glShaderSource(vertShader, 1, &code, NULL);
 
-  glCompileShader(vertShader);
-  glGetShaderiv(vertShader, GL_COMPILE_STATUS, &params);
+  gears->glCompileShader(vertShader);
+  gears->glGetShaderiv(vertShader, GL_COMPILE_STATUS, &params);
   if (!params) {
-    glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &params);
+    gears->glGetShaderiv(vertShader, GL_INFO_LOG_LENGTH, &params);
     log = calloc(1, params);
     if (!log) {
       printf("calloc log failed\n");
       goto out;
     }
-    glGetShaderInfoLog(vertShader, params, NULL, log);
+    gears->glGetShaderInfoLog(vertShader, params, NULL, log);
     printf("glCompileShader vertex failed: %s", log);
     free(log);
     goto out;
   }
 
-  glAttachShader(gears->program, vertShader);
+  gears->glAttachShader(gears->program, vertShader);
 
   /* fragment shader */
 
-  fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+  fragShader = gears->glCreateShader(GL_FRAGMENT_SHADER);
   if (!fragShader) {
     printf("glCreateShader fragment failed\n");
     goto out;
   }
 
   code = fragShaderSource;
-  if (strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.20") ||
-      strstr((char *)glGetString(GL_SHADING_LANGUAGE_VERSION), "1.30")) {
-    code += strlen("precision mediump float;\n");
-  }
-  glShaderSource(fragShader, 1, &code, NULL);
+  gears->glShaderSource(fragShader, 1, &code, NULL);
 
-  glCompileShader(fragShader);
-  glGetShaderiv(fragShader, GL_COMPILE_STATUS, &params);
+  gears->glCompileShader(fragShader);
+  gears->glGetShaderiv(fragShader, GL_COMPILE_STATUS, &params);
   if (!params) {
-    glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &params);
+    gears->glGetShaderiv(fragShader, GL_INFO_LOG_LENGTH, &params);
     log = calloc(1, params);
     if (!log) {
       printf("calloc log failed\n");
       goto out;
     }
-    glGetShaderInfoLog(fragShader, params, NULL, log);
+    gears->glGetShaderInfoLog(fragShader, params, NULL, log);
     printf("glCompileShader fragment failed: %s", log);
     free(log);
     goto out;
   }
 
-  glAttachShader(gears->program, fragShader);
+  gears->glAttachShader(gears->program, fragShader);
 
   /* link and use program */
 
-  glBindAttribLocation(gears->program, 0, "a_Position");
-  glBindAttribLocation(gears->program, 1, "a_Normal");
-  glBindAttribLocation(gears->program, 2, "a_TexCoord");
+  gears->glBindAttribLocation(gears->program, 0, "a_Position");
+  gears->glBindAttribLocation(gears->program, 1, "a_Normal");
+  gears->glBindAttribLocation(gears->program, 2, "a_TexCoord");
 
-  glLinkProgram(gears->program);
-  glGetProgramiv(gears->program, GL_LINK_STATUS, &params);
+  gears->glLinkProgram(gears->program);
+  gears->glGetProgramiv(gears->program, GL_LINK_STATUS, &params);
   if (!params) {
-    glGetProgramiv(gears->program, GL_INFO_LOG_LENGTH, &params);
+    gears->glGetProgramiv(gears->program, GL_INFO_LOG_LENGTH, &params);
     log = calloc(1, params);
     if (!log) {
       printf("calloc log failed\n");
       goto out;
     }
-    glGetProgramInfoLog(gears->program, params, NULL, log);
+    gears->glGetProgramInfoLog(gears->program, params, NULL, log);
     printf("glLinkProgram failed: %s", log);
     free(log);
     goto out;
@@ -513,39 +590,39 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
   /* destory shaders */
 
-  glDeleteShader(fragShader);
-  glDeleteShader(vertShader);
+  gears->glDeleteShader(fragShader);
+  gears->glDeleteShader(vertShader);
   vertShader = fragShader = 0;
 
   /* load texture */
 
   image_load(getenv("TEXTURE"), &image);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
+  gears->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.pixel_data);
   image_unload(&image);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  gears->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  gears->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   /* install program, set clear values, set viewport */
 
-  glUseProgram(gears->program);
+  gears->glUseProgram(gears->program);
 
-  glClearColor(0, 0, 0, 1);
+  gears->glClearColor(0, 0, 0, 1);
 
-  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+  gears->glViewport(0, 0, (GLint)win_width, (GLint)win_height);
 
   /* create gears */
 
-  gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
+  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7);
   if (!gears->gear1) {
     goto out;
   }
 
-  gears->gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
+  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7);
   if (!gears->gear2) {
     goto out;
   }
 
-  gears->gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
+  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7);
   if (!gears->gear3) {
     goto out;
   }
@@ -561,22 +638,25 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
 out:
   if (gears->gear3) {
-    delete_gear(gears->gear3);
+    delete_gear(gears, gears->gear3);
   }
   if (gears->gear2) {
-    delete_gear(gears->gear2);
+    delete_gear(gears, gears->gear2);
   }
   if (gears->gear1) {
-    delete_gear(gears->gear1);
+    delete_gear(gears, gears->gear1);
   }
   if (fragShader) {
-    glDeleteShader(fragShader);
+    gears->glDeleteShader(fragShader);
   }
   if (vertShader) {
-    glDeleteShader(vertShader);
+    gears->glDeleteShader(vertShader);
   }
   if (gears->program) {
-    glDeleteProgram(gears->program);
+    gears->glDeleteProgram(gears->program);
+  }
+  if (gears->lib_handle) {
+    dlclose(gears->lib_handle);
   }
   free(gears);
   return NULL;
@@ -593,16 +673,16 @@ static void glesv2_gears_draw(gears_t *gears, float view_tz, float view_rx, floa
     return;
   }
 
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  gears->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   identity(View);
   translate(View, 0, 0, (GLfloat)view_tz);
   rotate(View, (GLfloat)view_rx, 1, 0, 0);
   rotate(View, (GLfloat)view_ry, 0, 1, 0);
 
-  draw_gear(gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red  , View, gears->Projection, gears->program);
-  draw_gear(gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green, View, gears->Projection, gears->program);
-  draw_gear(gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue , View, gears->Projection, gears->program);
+  draw_gear(gears, gears->gear1, -3.0, -2.0,      (GLfloat)model_rz     , red  , View);
+  draw_gear(gears, gears->gear2,  3.1, -2.0, -2 * (GLfloat)model_rz - 9 , green, View);
+  draw_gear(gears, gears->gear3, -3.1,  4.2, -2 * (GLfloat)model_rz - 25, blue , View);
 }
 
 static void glesv2_gears_term(gears_t *gears)
@@ -611,15 +691,17 @@ static void glesv2_gears_term(gears_t *gears)
     return;
   }
 
-  delete_gear(gears->gear1);
-  delete_gear(gears->gear2);
-  delete_gear(gears->gear3);
-  glDeleteProgram(gears->program);
+  delete_gear(gears, gears->gear1);
+  delete_gear(gears, gears->gear2);
+  delete_gear(gears, gears->gear3);
+  gears->glDeleteProgram(gears->program);
+
+  printf("%s\n", gears->glGetString(GL_VERSION));
+  printf("%s\n", gears->glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+  dlclose(gears->lib_handle);
 
   free(gears);
-
-  printf("%s\n", glGetString(GL_VERSION));
-  printf("%s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 }
 
 /******************************************************************************/

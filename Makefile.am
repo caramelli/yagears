@@ -47,9 +47,9 @@ frag.spv: vulkan_gears.frag
 BUILT_SOURCES += vert.spv frag.spv
 
 bin_PROGRAMS       += yagears2-vk
-yagears2_vk_SOURCES = vk.c vulkan_gears.c
-yagears2_vk_CFLAGS  = @VULKAN_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_CFLAGS@
-yagears2_vk_LDADD   = @VULKAN_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_LIBS@
+yagears2_vk_SOURCES = vk.c vulkan_gears.c image_loader.c $(PNG_SOURCE) $(TIFF_SOURCE)
+yagears2_vk_CFLAGS  = @VULKAN_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_CFLAGS@
+yagears2_vk_LDADD   = @VULKAN_LIBS@ @PNG_LIBS@ @TIFF_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_LIBS@
 endif
 
 if MOSAIC
