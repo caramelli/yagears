@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.2')
+project('yagears', 'c', 'cpp', version: '2.3')
 
 config_h = configuration_data()
 
@@ -78,7 +78,7 @@ if not enable_gl
   if enable_glesv1_cm
     glesv1_cm_dep = dependency('glesv1_cm', required: false)
     if glesv1_cm_dep.found()
-      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm').stdout().strip(' \n').split(' '))
+      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm').stdout().strip().split(' '))
       glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
     else
       enable_glesv1_cm = false
@@ -89,7 +89,7 @@ if not enable_gl
     glesv2_dep = dependency('glesv2', required: false)
     xxd = find_program('xxd', required: false)
     if glesv2_dep.found() and xxd.found()
-      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2').stdout().strip(' \n').split(' '))
+      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2').stdout().strip().split(' '))
       glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so"'], link_args: '-ldl', dependencies: glesv2_dep)
     else
       enable_glesv2 = false
@@ -107,8 +107,8 @@ x11_dep = []
 directfb_dep = []
 if enable_gl
   if enable_gl_x11
-    libdir = run_command('pkg-config', '--variable=libdir', 'gl')
-    if cc.has_function('glXCreateContext', dependencies: cc.find_library('GL', dirs: libdir.stdout().strip('\n')))
+    libdir = run_command('pkg-config', '--variable=libdir', 'gl').stdout().strip()
+    if cc.has_function('glXCreateContext', dependencies: cc.find_library('GL', dirs: libdir))
       x11_dep = dependency('x11', required: false)
       if not x11_dep.found()
         enable_gl_x11 = false
@@ -120,8 +120,8 @@ if enable_gl
 
   if enable_gl_directfb
     message('Checking for DirectFBGL module')
-    moduledir = run_command('pkg-config', '--variable=moduledir', 'directfb-internal')
-    if run_command('test', '-d', moduledir.stdout().strip('\n') + '/interfaces/IDirectFBGL').returncode() == 0
+    moduledir = run_command('pkg-config', '--variable=moduledir', 'directfb-internal').stdout().strip()
+    if run_command('test', '-d', moduledir + '/interfaces/IDirectFBGL').returncode() == 0
       message('DirectFBGL found')
       directfb_dep = dependency('directfb', required: false)
       if not directfb_dep.found()
@@ -134,8 +134,8 @@ if enable_gl
   endif
 
   if enable_gl_fbdev
-    libdir = run_command('pkg-config', '--variable=libdir', 'gl')
-    if not cc.has_function('glFBDevCreateContext', dependencies: cc.find_library('GL', dirs: libdir.stdout().strip('\n')))
+    libdir = run_command('pkg-config', '--variable=libdir', 'gl').stdout().strip()
+    if not cc.has_function('glFBDevCreateContext', dependencies: cc.find_library('GL', dirs: libdir))
       enable_gl_fbdev = false
     endif
   endif
@@ -150,13 +150,15 @@ config_h.set('GL_FBDEV', enable_gl_fbdev, description: 'Support for GLFBDev')
 
 egl_dep = []
 wayland_dep = []
+wayland_egl_dep = []
 xcb_dep = []
 drm_dep = []
 rpi_dep = []
 if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayland or enable_egl_xcb or enable_egl_drm or enable_egl_rpi
   egl_dep = dependency('egl', required: false)
   if egl_dep.found()
-    egl_dep = declare_dependency(compile_args: '-DEGL_NO_X11', dependencies: egl_dep)
+    egl_dep = declare_dependency(compile_args: ['-DEGL_NO_X11', '-DEGL_EGLEXT_PROTOTYPES'], dependencies: egl_dep)
+
     if enable_egl_x11
       if not enable_gl_x11
         x11_dep = dependency('x11', required: false)
@@ -194,10 +196,13 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
                '''
         if cc.links(code, dependencies: wayland_dep)
           message('"wl_shell_surface_set_position" found')
-          config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', '1')
+          config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', true, description: 'Have function wl_shell_surface_set_position')
         else
           message('"wl_shell_surface_set_position" not found')
+          config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', false, description: 'Have function wl_shell_surface_set_position')
         endif
+
+        wayland_egl_dep = [wayland_dep, cc.find_library('wayland-egl', dirs: run_command('pkg-config', '--variable=libdir', 'wayland-client').stdout().strip())]
       endif
     endif
 
@@ -216,7 +221,11 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
         endif
       endforeach
       if enable_egl_drm
-        drm_dep = declare_dependency(compile_args: ['-DDRI_DRIVERDIR="@0@"'.format(run_command('pkg-config', '--variable=dridriverdir', 'dri').stdout().strip('\n')), '-DDRI_MAJOR_VERSION=@0@'.format(run_command('pkg-config', '--modversion', 'dri').stdout().split('.')[0]), '-DDRI_MINOR_VERSION=@0@'.format(run_command('pkg-config', '--modversion', 'dri').stdout().split('.')[1])], link_args: '-ldl', dependencies: drm_dep)
+        dridriverdir = run_command('pkg-config', '--variable=dridriverdir', 'dri').stdout().strip()
+        modversion = run_command('pkg-config', '--modversion', 'dri')
+        drimajorversion = modversion.stdout().split('.')[0]
+        driminorversion = modversion.stdout().split('.')[1]
+        drm_dep = declare_dependency(compile_args: ['-DDRI_DRIVERDIR="@0@"'.format(dridriverdir), '-DDRI_MAJOR_VERSION=@0@'.format(drimajorversion), '-DDRI_MINOR_VERSION=@0@'.format(driminorversion)], link_args: '-ldl', dependencies: drm_dep)
       endif
     endif
 
@@ -255,10 +264,10 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
   vulkan_dep = dependency('vulkan', required: false)
   glslang_validator = find_program('glslangValidator', required: false)
   if vulkan_dep.found() and glslang_validator.found()
-    libdir = run_command('pkg-config', '--variable=libdir', 'vulkan')
+    libdir = run_command('pkg-config', '--variable=libdir', 'vulkan').stdout().strip()
 
     if enable_vk_x11
-      if cc.has_function('vkCreateXlibSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+      if cc.has_function('vkCreateXlibSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir))
         if not enable_gl_x11 and not enable_egl_x11
           x11_dep = dependency('x11', required: false)
           if not x11_dep.found()
@@ -271,7 +280,7 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
     endif
 
     if enable_vk_directfb
-      if cc.has_function('vkCreateDirectFBSurfaceEXT', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+      if cc.has_function('vkCreateDirectFBSurfaceEXT', dependencies: cc.find_library('vulkan', dirs: libdir))
         if not enable_gl_directfb and not enable_egl_directfb
           directfb_dep = dependency('directfb', required: false)
           if not directfb_dep.found()
@@ -284,13 +293,13 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
     endif
 
     if enable_vk_fbdev
-      if not cc.has_function('vkCreateFBDevSurfaceEXT', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+      if not cc.has_function('vkCreateFBDevSurfaceEXT', dependencies: cc.find_library('vulkan', dirs: libdir))
         enable_vk_fbdev = false
       endif
     endif
 
     if enable_vk_wayland
-      if cc.has_function('vkCreateWaylandSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+      if cc.has_function('vkCreateWaylandSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir))
         if not enable_egl_wayland
           wayland_dep = [dependency('wayland-client', required: false), dependency('xkbcommon', required: false)]
           foreach dep : wayland_dep
@@ -310,9 +319,10 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
                    '''
             if cc.links(code, dependencies: wayland_dep)
               message('"wl_shell_surface_set_position" found')
-              config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', '1')
+              config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', true, description: 'Have function wl_shell_surface_set_position')
             else
               message('"wl_shell_surface_set_position" not found')
+              config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', false, description: 'Have function wl_shell_surface_set_position')
             endif
           endif
         endif
@@ -322,7 +332,7 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
     endif
 
     if enable_vk_xcb
-      if cc.has_function('vkCreateXcbSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir.stdout().strip('\n')))
+      if cc.has_function('vkCreateXcbSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir))
         if not enable_egl_xcb
           xcb_dep = dependency('xcb', required: false)
           if not xcb_dep.found()
@@ -366,7 +376,7 @@ fltk_dep = []
 if enable_fltk
   fltk_config = find_program('fltk-config', required: false)
   if fltk_config.found()
-    fltk_dep = declare_dependency(compile_args: run_command(fltk_config, '--cflags').stdout().strip('\n').split(' '), link_args: run_command(fltk_config, '--use-gl', '--ldflags').stdout().strip('\n').split(' '))
+    fltk_dep = declare_dependency(compile_args: run_command(fltk_config, '--cflags').stdout().strip().split(' '), link_args: run_command(fltk_config, '--use-gl', '--ldflags').stdout().strip().split(' '))
   else
     enable_fltk = false
   endif
@@ -483,7 +493,7 @@ wx_dep = []
 if enable_wx
   wx_config = find_program('wx-config', required: false)
   if wx_config.found()
-    wx_dep = declare_dependency(compile_args: run_command(wx_config, '--cflags').stdout().strip('\n').split(' '), link_args: run_command(wx_config, '--libs', 'core,gl').stdout().strip('\n').split(' '))
+    wx_dep = declare_dependency(compile_args: run_command(wx_config, '--cflags').stdout().strip().split(' '), link_args: run_command(wx_config, '--libs', 'core,gl').stdout().strip().split(' '))
   else
     enable_wx = false
   endif
@@ -493,8 +503,6 @@ config_h.set('WX', enable_wx, description: 'Support for wxWidgets graphical user
 if not enable_efl and not enable_fltk and not enable_glfw and not enable_glut and not enable_gtk and not enable_qt and not enable_sdl and not enable_sfml and not enable_wx
   warning('No Graphical User Interface Toolkits found')
 endif
-
-configure_file(output: 'config.h', configuration: config_h)
 
 # Image libraries
 
@@ -515,6 +523,8 @@ if enable_tiff
 endif
 
 # Build configuration
+
+configure_file(configuration: config_h, output: 'config.h')
 
 message('')
 message('OpenGL Engines:')
@@ -600,8 +610,8 @@ glesv2_source = []
 vert_xxd_file = []
 frag_xxd_file = []
 if GLESV2
-vert_xxd_file = custom_target('vert_xxd', command: ['sh', files('xxd.sh'), '@INPUT@', '@OUTPUT@'], input: 'glesv2_gears.vert', output: 'vert.xxd')
-frag_xxd_file = custom_target('frag_xxd', command: ['sh', files('xxd.sh'), '@INPUT@', '@OUTPUT@'], input: 'glesv2_gears.frag', output: 'frag.xxd')
+vert_xxd_file = custom_target('vert_xxd', command: [files('xxd.sh'), '@INPUT@', '@OUTPUT@'], input: 'glesv2_gears.vert', output: 'vert.xxd')
+frag_xxd_file = custom_target('frag_xxd', command: [files('xxd.sh'), '@INPUT@', '@OUTPUT@'], input: 'glesv2_gears.frag', output: 'frag.xxd')
 
 glesv2_source = 'glesv2_gears.c'
 endif
@@ -616,22 +626,22 @@ if TIFF
 tiff_source = 'tiff_image.c'
 endif
 
-libyagears2 = static_library('yagears2',
-                             'gears_engine.c', gl_source, glesv1_cm_source, glesv2_source, vert_xxd_file, frag_xxd_file, 'image_loader.c', png_source, tiff_source,
-                             dependencies: [gl_dep, glesv1_cm_dep, glesv2_dep, png_dep, tiff_dep])
+libyagears = static_library('yagears',
+                            'gears_engine.c', gl_source, glesv1_cm_source, glesv2_source, vert_xxd_file, frag_xxd_file, 'image_loader.c', png_source, tiff_source,
+                            dependencies: [gl_dep, glesv1_cm_dep, glesv2_dep, png_dep, tiff_dep])
 
 executable('yagears2',
            'main.c',
-           dependencies: [egl_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep, drm_dep, rpi_dep],
-           link_whole: libyagears2,
+           dependencies: [egl_dep, x11_dep, directfb_dep, wayland_egl_dep, xcb_dep, drm_dep, rpi_dep],
+           link_whole: libyagears,
            install: true)
 
 if VK
-glslang_validator_gen = generator(glslang_validator, output: '@PLAINNAME@', arguments: ['@INPUT@', '-V', '-x'])
-spirv_files = glslang_validator_gen.process('vulkan_gears.vert', 'vulkan_gears.frag')
+vert_spv_file = custom_target('vert_spv', command: [glslang_validator, '@INPUT@', '-V', '-x'], input: 'vulkan_gears.vert', output: 'vert.spv')
+frag_spv_file = custom_target('frag_spv', command: [glslang_validator, '@INPUT@', '-V', '-x'], input: 'vulkan_gears.frag', output: 'frag.spv')
 
 executable('yagears2-vk',
-           'vk.c', 'vulkan_gears.c', spirv_files, 'image_loader.c', png_source, tiff_source,
+           'vk.c', 'vulkan_gears.c', vert_spv_file, frag_spv_file, 'image_loader.c', png_source, tiff_source,
            dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep],
            install: true)
 endif
@@ -640,7 +650,7 @@ if MOSAIC
 executable('yagears2-mosaic',
            'mosaic.c',
            dependencies: glut_dep,
-           link_whole: libyagears2,
+           link_whole: libyagears,
            install: true)
 endif
 
@@ -648,6 +658,6 @@ if GUI
 executable('yagears2-gui',
            'gui.cc',
            dependencies: [efl_dep, fltk_dep, glfw_dep, glut_dep, gtk_dep, qt_dep, sdl_dep, sfml_dep, wx_dep],
-           link_whole: libyagears2,
+           link_whole: libyagears,
            install: true)
 endif

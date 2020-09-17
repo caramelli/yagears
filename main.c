@@ -54,7 +54,7 @@
 #include <linux/input.h>
 #endif
 #if defined(EGL_WAYLAND)
-#include <wayland-client.h>
+#include <wayland-egl.h>
 #include <sys/mman.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
@@ -123,6 +123,7 @@ struct __DRIimageExtensionRec {
 #endif
 #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
 #include <EGL/egl.h>
+#include <EGL/eglext.h>
 #endif
 
 #include "gears_engine.h"
@@ -315,14 +316,20 @@ static void fb_keyboard_handle_key(struct input_event *event)
 #endif
 
 #if defined(EGL_WAYLAND)
+#define wl_window wl_egl_window
+
 struct wl_window {
-  struct wl_surface *surface;
+  long version;
   int width;
   int height;
   int dx;
   int dy;
   int attached_width;
   int attached_height;
+  void *private;
+  void (*resize_callback)(struct wl_window *, void *);
+  void (*destroy_window_callback)(void *);
+  struct wl_surface *surface;
 };
 
 struct wl_data {
@@ -868,6 +875,9 @@ int main(int argc, char *argv[])
   char rpi_event[5];
   #endif
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  const char *egl_extension_name = NULL, *egl_extensions = NULL;
+  PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT = NULL;
+  PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC eglCreatePlatformWindowSurfaceEXT = NULL;
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
   EGLint egl_config_attr[16];
@@ -1245,32 +1255,91 @@ int main(int argc, char *argv[])
 
   #if defined(EGL_X11)
   if (!strcmp(backend, "egl-x11")) {
-    setenv("EGL_PLATFORM", "x11", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)x11_dpy);
+    egl_extension_name = "EGL_EXT_platform_x11";
   }
   #endif
   #if defined(EGL_DIRECTFB)
   if (!strcmp(backend, "egl-directfb")) {
-    setenv("EGL_PLATFORM", "directfb", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)dfb_dpy);
+    egl_extension_name = "EGL_EXT_platform_directfb";
   }
   #endif
   #if defined(EGL_FBDEV)
   if (!strcmp(backend, "egl-fbdev")) {
-    setenv("EGL_PLATFORM", "fbdev", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)(long)fb_dpy);
+    egl_extension_name = "EGL_EXT_platform_fbdev";
   }
   #endif
   #if defined(EGL_WAYLAND)
   if (!strcmp(backend, "egl-wayland")) {
-    setenv("EGL_PLATFORM", "wayland", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)wl_dpy);
+    egl_extension_name = "EGL_EXT_platform_wayland";
   }
   #endif
   #if defined(EGL_XCB)
   if (!strcmp(backend, "egl-xcb")) {
-    setenv("EGL_PLATFORM", "xcb", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)xcb_dpy);
+    egl_extension_name = "EGL_EXT_platform_xcb";
+  }
+  #endif
+
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB)
+  egl_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+  if (egl_extension_name && egl_extensions && strstr(egl_extensions, egl_extension_name)) {
+    eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
+    eglCreatePlatformWindowSurfaceEXT = (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC)eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
+  }
+  #endif
+
+  #if defined(EGL_X11)
+  if (!strcmp(backend, "egl-x11")) {
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_X11_EXT, x11_dpy, NULL);
+    }
+    else {
+      setenv("EGL_PLATFORM", "x11", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)x11_dpy);
+    }
+  }
+  #endif
+  #if defined(EGL_DIRECTFB)
+  if (!strcmp(backend, "egl-directfb")) {
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_DIRECTFB_EXT, dfb_dpy, NULL);
+    }
+    else {
+      setenv("EGL_PLATFORM", "directfb", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)dfb_dpy);
+    }
+  }
+  #endif
+  #if defined(EGL_FBDEV)
+  if (!strcmp(backend, "egl-fbdev")) {
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_FBDEV_EXT, &fb_dpy, NULL);
+    }
+    else {
+      setenv("EGL_PLATFORM", "fbdev", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)(long)fb_dpy);
+    }
+  }
+  #endif
+  #if defined(EGL_WAYLAND)
+  if (!strcmp(backend, "egl-wayland")) {
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_WAYLAND_EXT, wl_dpy, NULL);
+    }
+    else {
+      setenv("EGL_PLATFORM", "wayland", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)wl_dpy);
+    }
+  }
+  #endif
+  #if defined(EGL_XCB)
+  if (!strcmp(backend, "egl-xcb")) {
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_XCB_EXT, xcb_dpy, NULL);
+    }
+    else {
+      setenv("EGL_PLATFORM", "xcb", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)xcb_dpy);
+    }
   }
   #endif
   #if defined(EGL_DRM)
@@ -1504,15 +1573,24 @@ int main(int argc, char *argv[])
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
     #endif
 
-    wl_win = calloc(1, sizeof(struct wl_window));
-    if (!wl_win) {
-      printf("wl_window calloc failed: %s\n", strerror(errno));
-      goto out;
-    }
+    if (getenv("NO_WL_EGL_WINDOW")) {
+      wl_win = calloc(1, sizeof(struct wl_window));
+      if (!wl_win) {
+        printf("wl_window calloc failed: %s\n", strerror(errno));
+        goto out;
+      }
 
-    wl_win->surface = wl_surface;
-    wl_win->width = win_width;
-    wl_win->height = win_height;
+      wl_win->surface = wl_surface;
+      wl_win->width = win_width;
+      wl_win->height = win_height;
+    }
+    else {
+      wl_win = wl_egl_window_create(wl_surface, win_width, win_height);
+      if (!wl_win) {
+        printf("wl_egl_window_create failed\n");
+        goto out;
+      }
+    }
 
     wl_data.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if (!wl_data.xkb_context) {
@@ -1661,27 +1739,52 @@ int main(int argc, char *argv[])
 
   #if defined(EGL_X11)
   if (!strcmp(backend, "egl-x11")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)x11_win, NULL);
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, &x11_win, NULL);
+    }
+    else {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)x11_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_DIRECTFB)
   if (!strcmp(backend, "egl-directfb")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)dfb_win, NULL);
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, dfb_win, NULL);
+    }
+    else {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)dfb_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_FBDEV)
   if (!strcmp(backend, "egl-fbdev")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)fb_win, NULL);
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, fb_win, NULL);
+    }
+    else {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)fb_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_WAYLAND)
   if (!strcmp(backend, "egl-wayland")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)wl_win, NULL);
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, wl_win, NULL);
+    }
+    else {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)wl_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_XCB)
   if (!strcmp(backend, "egl-xcb")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)(long)xcb_win, NULL);
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, &xcb_win, NULL);
+    }
+    else {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)(long)xcb_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_DRM)
@@ -2175,12 +2278,17 @@ out:
       xkb_context_unref(wl_data.xkb_context);
     }
 
-    if (wl_shell_surface) {
-      wl_shell_surface_destroy(wl_shell_surface);
+    if (wl_win) {
+      if (getenv("NO_WL_EGL_WINDOW")) {
+        free(wl_win);
+      }
+      else {
+        wl_egl_window_destroy(wl_win);
+      }
     }
 
-    if (wl_win) {
-      free(wl_win);
+    if (wl_shell_surface) {
+      wl_shell_surface_destroy(wl_shell_surface);
     }
 
     if (wl_surface) {

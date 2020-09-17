@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.2)
+AC_INIT(yagears, 2.3)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -217,7 +217,8 @@ fi
 if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_fbdev = xyes -o x$enable_egl_wayland = xyes -o x$enable_egl_xcb = xyes -o x$enable_egl_drm -o x$enable_egl_rpi; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
-    EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_X11"
+    EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_X11 -DEGL_EGLEXT_PROTOTYPES"
+
     if test x$enable_egl_x11 = xyes; then
       if test x$enable_gl_x11 = xno; then
         PKG_CHECK_MODULES(X11, x11, , enable_egl_x11=no)
@@ -235,12 +236,17 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
       if test x$enable_egl_wayland = xyes; then
         AC_MSG_CHECKING(for wl_shell_surface_set_position)
         save_CFLAGS=$CFLAGS
-        CFLAGS="$CFLAGS `$PKG_CONFIG --cflags wayland-client`"
+        CFLAGS="$CFLAGS $WAYLAND_CFLAGS"
         save_LIBS=$LIBS
-        LIBS="$LIBS `$PKG_CONFIG --libs wayland-client`"
+        LIBS="$LIBS $WAYLAND_LIBS"
         AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
         CFLAGS=$save_CFLAGS
         LIBS=$save_LIBS
+
+        WAYLAND_EGL_CFLAGS=$WAYLAND_CFLAGS
+        WAYLAND_EGL_LIBS="$WAYLAND_LIBS -lwayland-egl"
+        AC_SUBST(WAYLAND_EGL_CFLAGS)
+        AC_SUBST(WAYLAND_EGL_LIBS)
       fi
     fi
 
@@ -251,7 +257,11 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
     if test x$enable_egl_drm = xyes; then
       PKG_CHECK_MODULES(DRM, gbm libdrm libevdev, , enable_egl_drm=no)
       if test x$enable_egl_drm = xyes; then
-        DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"`$PKG_CONFIG --variable=dridriverdir dri`\\\" -DDRI_MAJOR_VERSION=`$PKG_CONFIG --modversion dri | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'` -DDRI_MINOR_VERSION=`$PKG_CONFIG --modversion dri | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`"
+        DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
+        MODVERSION=`$PKG_CONFIG --modversion dri`
+        DRIMAJORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`
+        DRI_MINOR_VERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`
+        DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"$DRIDRIVERDIR\\\" -DDRI_MAJOR_VERSION=$DRIMAJORVERSION -DDRI_MINOR_VERSION=$DRI_MINOR_VERSION"
         DRM_LIBS="$DRM_LIBS -ldl"
       fi
     fi

@@ -176,6 +176,7 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   int i, j;
   float n[3], t[2];
   int k = 0;
+  VkResult res = VK_SUCCESS;
   VkBufferCreateInfo bufferCreateInfo;
   VkMemoryAllocateInfo memoryAllocateInfo;
   VkDeviceSize offset = 0;
@@ -345,12 +346,28 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   /* vertex buffer object */
 
   memset(&bufferCreateInfo, 0, sizeof(VkBufferCreateInfo));
-  vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->vbo);
+  res = vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->vbo);
+  if (res) {
+    printf("vkCreateBuffer failed: %d\n", res);
+    goto out;
+  }
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = gear->nvertices * sizeof(Vertex);
-  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->vboMemory);
-  vkMapMemory(gears->device, gear->vboMemory, 0, gear->nvertices * sizeof(Vertex), 0, &gear->vbo_data);
-  vkBindBufferMemory(gears->device, gear->vbo, gear->vboMemory, 0);
+  res = vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->vboMemory);
+  if (res) {
+    printf("vkAllocateMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkMapMemory(gears->device, gear->vboMemory, 0, gear->nvertices * sizeof(Vertex), 0, &gear->vbo_data);
+  if (res) {
+    printf("vkMapMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkBindBufferMemory(gears->device, gear->vbo, gear->vboMemory, 0);
+  if (res) {
+    printf("vkBindBufferMemory failed: %d\n", res);
+    goto out;
+  }
 
   vkCmdBindVertexBuffers(gears->commandBuffer, 0, 1, &gear->vbo, &offset);
 
@@ -359,18 +376,38 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   /* uniform buffer object */
 
   memset(&bufferCreateInfo, 0, sizeof(VkBufferCreateInfo));
-  vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->ubo);
+  res = vkCreateBuffer(gears->device, &bufferCreateInfo, NULL, &gear->ubo);
+  if (res) {
+    printf("vkCreateBuffer failed: %d\n", res);
+    goto out;
+  }
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = sizeof(struct Uniform);
-  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->uboMemory);
-  vkMapMemory(gears->device, gear->uboMemory, 0, sizeof(struct Uniform), 0, &gear->ubo_data);
-  vkBindBufferMemory(gears->device, gear->ubo, gear->uboMemory, 0);
+  res = vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gear->uboMemory);
+  if (res) {
+    printf("vkAllocateMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkMapMemory(gears->device, gear->uboMemory, 0, sizeof(struct Uniform), 0, &gear->ubo_data);
+  if (res) {
+    printf("vkMapMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkBindBufferMemory(gears->device, gear->ubo, gear->uboMemory, 0);
+  if (res) {
+    printf("vkBindBufferMemory failed: %d\n", res);
+    goto out;
+  }
 
   memset(&descriptorSetAllocateInfo, 0, sizeof(VkDescriptorSetAllocateInfo));
   descriptorSetAllocateInfo.descriptorPool = gears->descriptorPool;
   descriptorSetAllocateInfo.descriptorSetCount = 1;
   descriptorSetAllocateInfo.pSetLayouts = &gears->descriptorSetLayout;
-  vkAllocateDescriptorSets(gears->device, &descriptorSetAllocateInfo, &gear->descriptorSet);
+  res = vkAllocateDescriptorSets(gears->device, &descriptorSetAllocateInfo, &gear->descriptorSet);
+  if (res) {
+    printf("vkAllocateDescriptorSets failed: %d\n", res);
+    goto out;
+  }
 
   memset(&writeDescriptorSet[0], 0, sizeof(VkWriteDescriptorSet));
   writeDescriptorSet[0].dstSet = gear->descriptorSet;
@@ -399,6 +436,24 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   return gear;
 
 out:
+  if (gear->ubo_data) {
+    vkUnmapMemory(gears->device, gear->uboMemory);
+  }
+  if (gear->uboMemory) {
+    vkFreeMemory(gears->device, gear->uboMemory, NULL);
+  }
+  if (gear->ubo) {
+    vkDestroyBuffer(gears->device, gear->ubo, NULL);
+  }
+  if (gear->vbo_data) {
+    vkUnmapMemory(gears->device, gear->vboMemory);
+  }
+  if (gear->vboMemory) {
+    vkFreeMemory(gears->device, gear->vboMemory, NULL);
+  }
+  if (gear->vbo) {
+    vkDestroyBuffer(gears->device, gear->vbo, NULL);
+  }
   if (gear->strips) {
     free(gear->strips);
   }
@@ -472,6 +527,7 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
     #include "frag.spv"
   };
   uint32_t count = 1;
+  VkResult res = VK_SUCCESS;
   VkImageCreateInfo imageCreateInfo;
   VkMemoryRequirements memoryRequirements;
   VkMemoryAllocateInfo memoryAllocateInfo;
@@ -501,7 +557,7 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   VkPipelineDynamicStateCreateInfo pipelineDynamicStateCreateInfo;
   VkDynamicState dynamicState[2];
   int texture_width, texture_height;
-  void *texture_data;
+  void *texture_data = NULL;
   VkSamplerCreateInfo samplerCreateInfo;
   VkCommandPoolCreateInfo commandPoolCreateInfo;
   VkCommandBufferAllocateInfo commandBufferAllocateInfo;
@@ -524,7 +580,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
 
   /* color attachment */
 
-  vkGetSwapchainImagesKHR(gears->device, swapchain, &count, &gears->colorImage);
+  res = vkGetSwapchainImagesKHR(gears->device, swapchain, &count, &gears->colorImage);
+  if (res) {
+    printf("vkGetSwapchainImagesKHR failed: %d\n", res);
+    goto out;
+  }
 
   /* depth attachment */
 
@@ -536,15 +596,27 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageCreateInfo.mipLevels = 1;
   imageCreateInfo.arrayLayers = 1;
   imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  vkCreateImage(gears->device, &imageCreateInfo, 0, &gears->depthImage);
+  res = vkCreateImage(gears->device, &imageCreateInfo, 0, &gears->depthImage);
+  if (res) {
+    printf("vkCreateImage failed: %d\n", res);
+    goto out;
+  }
 
   memset(&memoryRequirements, 0, sizeof(VkMemoryRequirements));
   vkGetImageMemoryRequirements(gears->device, gears->depthImage, &memoryRequirements);
 
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = memoryRequirements.size;
-  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->depthMemory);
-  vkBindImageMemory(gears->device, gears->depthImage, gears->depthMemory, 0);
+  res = vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->depthMemory);
+  if (res) {
+    printf("vkAllocateMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkBindImageMemory(gears->device, gears->depthImage, gears->depthMemory, 0);
+  if (res) {
+    printf("vkBindImageMemory failed: %d\n", res);
+    goto out;
+  }
 
   /* create framebuffer */
 
@@ -555,7 +627,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(gears->device, &imageViewCreateInfo, NULL, &gears->imageView[0]);
+  res = vkCreateImageView(gears->device, &imageViewCreateInfo, NULL, &gears->imageView[0]);
+  if (res) {
+    printf("vkCreateImageView failed: %d\n", res);
+    goto out;
+  }
 
   memset(&imageViewCreateInfo, 0, sizeof(VkImageViewCreateInfo));
   imageViewCreateInfo.image = gears->depthImage;
@@ -564,14 +640,22 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->imageView[1]);
+  res = vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->imageView[1]);
+  if (res) {
+    printf("vkCreateImageView failed: %d\n", res);
+    goto out;
+  }
 
   memset(&framebufferCreateInfo, 0, sizeof(VkFramebufferCreateInfo));
   framebufferCreateInfo.attachmentCount = 2;
   framebufferCreateInfo.pAttachments = gears->imageView;
   framebufferCreateInfo.width = win_width;
   framebufferCreateInfo.height = win_height;
-  vkCreateFramebuffer(gears->device, &framebufferCreateInfo, NULL, &gears->framebuffer);
+  res = vkCreateFramebuffer(gears->device, &framebufferCreateInfo, NULL, &gears->framebuffer);
+  if (res) {
+    printf("vkCreateFramebuffer failed: %d\n", res);
+    goto out;
+  }
 
   /* create render pass */
 
@@ -594,21 +678,33 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   attachmentReference[1].attachment = 1;
   subpassDescription.pDepthStencilAttachment = &attachmentReference[1];
   renderPassCreateInfo.pSubpasses = &subpassDescription;
-  vkCreateRenderPass(gears->device, &renderPassCreateInfo, NULL, &gears->renderPass);
+  res = vkCreateRenderPass(gears->device, &renderPassCreateInfo, NULL, &gears->renderPass);
+  if (res) {
+    printf("vkCreateRenderPass failed: %d\n", res);
+    goto out;
+  }
 
   /* vertex shader */
 
   memset(&shaderModuleCreateInfo, 0, sizeof(VkShaderModuleCreateInfo));
   shaderModuleCreateInfo.codeSize = sizeof(vertShaderSource);
   shaderModuleCreateInfo.pCode = vertShaderSource;
-  vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &vertShaderModule);
+  res = vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &vertShaderModule);
+  if (res) {
+    printf("vkCreateShaderModule failed: %d\n", res);
+    goto out;
+  }
 
   /* fragment shader */
 
   memset(&shaderModuleCreateInfo, 0, sizeof(VkShaderModuleCreateInfo));
   shaderModuleCreateInfo.codeSize = sizeof(fragShaderSource);
   shaderModuleCreateInfo.pCode = fragShaderSource;
-  vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &fragShaderModule);
+  res = vkCreateShaderModule(gears->device, &shaderModuleCreateInfo, NULL, &fragShaderModule);
+  if (res) {
+    printf("vkCreateShaderModule failed: %d\n", res);
+    goto out;
+  }
 
   /* create pipeline */
 
@@ -622,12 +718,20 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   descriptorSetLayoutBinding[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   descriptorSetLayoutBinding[1].descriptorCount = 1;
   descriptorSetLayoutCreateInfo.pBindings = descriptorSetLayoutBinding;
-  vkCreateDescriptorSetLayout(gears->device, &descriptorSetLayoutCreateInfo, NULL, &gears->descriptorSetLayout);
+  res = vkCreateDescriptorSetLayout(gears->device, &descriptorSetLayoutCreateInfo, NULL, &gears->descriptorSetLayout);
+  if (res) {
+    printf("vkCreateDescriptorSetLayout failed: %d\n", res);
+    goto out;
+  }
 
   memset(&pipelineLayoutCreateInfo, 0, sizeof(VkPipelineLayoutCreateInfo));
   pipelineLayoutCreateInfo.setLayoutCount = 1;
   pipelineLayoutCreateInfo.pSetLayouts = &gears->descriptorSetLayout;
-  vkCreatePipelineLayout(gears->device, &pipelineLayoutCreateInfo, NULL, &gears->pipelineLayout);
+  res = vkCreatePipelineLayout(gears->device, &pipelineLayoutCreateInfo, NULL, &gears->pipelineLayout);
+  if (res) {
+    printf("vkCreatePipelineLayout failed: %d\n", res);
+    goto out;
+  }
 
   memset(&graphicsPipelineCreateInfo, 0, sizeof(VkGraphicsPipelineCreateInfo));
   graphicsPipelineCreateInfo.stageCount = 2;
@@ -693,7 +797,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   graphicsPipelineCreateInfo.pDynamicState = &pipelineDynamicStateCreateInfo;
   graphicsPipelineCreateInfo.layout = gears->pipelineLayout;
   graphicsPipelineCreateInfo.renderPass = gears->renderPass;
-  vkCreateGraphicsPipelines(gears->device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, NULL, &gears->pipeline);
+  res = vkCreateGraphicsPipelines(gears->device, VK_NULL_HANDLE, 1, &graphicsPipelineCreateInfo, NULL, &gears->pipeline);
+  if (res) {
+    printf("vkCreateGraphicsPipelines failed: %d\n", res);
+    goto out;
+  }
 
   /* destory shaders */
 
@@ -713,16 +821,32 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageCreateInfo.mipLevels = 1;
   imageCreateInfo.arrayLayers = 1;
   imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  vkCreateImage(gears->device, &imageCreateInfo, NULL, &gears->textureImage);
+  res = vkCreateImage(gears->device, &imageCreateInfo, NULL, &gears->textureImage);
+  if (res) {
+    printf("vkCreateImage failed: %d\n", res);
+    goto out;
+  }
 
   memset(&memoryRequirements, 0, sizeof(VkMemoryRequirements));
   vkGetImageMemoryRequirements(gears->device, gears->textureImage, &memoryRequirements);
 
   memset(&memoryAllocateInfo, 0, sizeof(VkMemoryAllocateInfo));
   memoryAllocateInfo.allocationSize = memoryRequirements.size;
-  vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->textureMemory);
-  vkMapMemory(gears->device, gears->textureMemory, 0, memoryRequirements.size, 0, &texture_data);
-  vkBindImageMemory(gears->device, gears->textureImage, gears->textureMemory, 0);
+  res = vkAllocateMemory(gears->device, &memoryAllocateInfo, NULL, &gears->textureMemory);
+  if (res) {
+    printf("vkAllocateMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkMapMemory(gears->device, gears->textureMemory, 0, memoryRequirements.size, 0, &texture_data);
+  if (res) {
+    printf("vkMapMemory failed: %d\n", res);
+    goto out;
+  }
+  res = vkBindImageMemory(gears->device, gears->textureImage, gears->textureMemory, 0);
+  if (res) {
+    printf("vkBindImageMemory failed: %d\n", res);
+    goto out;
+  }
 
   image_load(getenv("TEXTURE"), texture_data, &texture_width, &texture_height);
 
@@ -733,23 +857,43 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   imageViewCreateInfo.subresourceRange.levelCount = 1;
   imageViewCreateInfo.subresourceRange.layerCount = 1;
-  vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->texture);
+  res = vkCreateImageView(gears->device, &imageViewCreateInfo, 0, &gears->texture);
+  if (res) {
+    printf("vkCreateImageView failed: %d\n", res);
+    goto out;
+  }
 
   memset(&samplerCreateInfo, 0, sizeof(VkSamplerCreateInfo));
-  vkCreateSampler(gears->device, &samplerCreateInfo, NULL, &gears->sampler);
+  res = vkCreateSampler(gears->device, &samplerCreateInfo, NULL, &gears->sampler);
+  if (res) {
+    printf("vkCreateSampler failed: %d\n", res);
+    goto out;
+  }
 
   /* command buffer submitted to queue, set clear values, set viewport */
 
   memset(&commandPoolCreateInfo, 0, sizeof(VkCommandPoolCreateInfo));
-  vkCreateCommandPool(gears->device, &commandPoolCreateInfo, NULL, &gears->commandPool);
+  res = vkCreateCommandPool(gears->device, &commandPoolCreateInfo, NULL, &gears->commandPool);
+  if (res) {
+    printf("vkCreateCommandPool failed: %d\n", res);
+    goto out;
+  }
 
   memset(&commandBufferAllocateInfo, 0, sizeof(VkCommandBufferAllocateInfo));
   commandBufferAllocateInfo.commandPool = gears->commandPool;
   commandBufferAllocateInfo.commandBufferCount = 1;
-  vkAllocateCommandBuffers(gears->device, &commandBufferAllocateInfo, &gears->commandBuffer);
+  res = vkAllocateCommandBuffers(gears->device, &commandBufferAllocateInfo, &gears->commandBuffer);
+  if (res) {
+    printf("vkAllocateCommandBuffers failed: %d\n", res);
+    goto out;
+  }
 
   memset(&commandBufferBeginInfo, 0, sizeof(VkCommandBufferBeginInfo));
-  vkBeginCommandBuffer(gears->commandBuffer, &commandBufferBeginInfo);
+  res = vkBeginCommandBuffer(gears->commandBuffer, &commandBufferBeginInfo);
+  if (res) {
+    printf("vkBeginCommandBuffer failed: %d\n", res);
+    goto out;
+  }
 
   memset(&renderPassBeginInfo, 0, sizeof(VkRenderPassBeginInfo));
   renderPassBeginInfo.renderPass = gears->renderPass;
@@ -786,7 +930,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   descriptorPoolSize[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   descriptorPoolSize[1].descriptorCount = 3;
   descriptorPoolCreateInfo.pPoolSizes = descriptorPoolSize;
-  vkCreateDescriptorPool(gears->device, &descriptorPoolCreateInfo, NULL, &gears->descriptorPool);
+  res = vkCreateDescriptorPool(gears->device, &descriptorPoolCreateInfo, NULL, &gears->descriptorPool);
+  if (res) {
+    printf("vkCreateDescriptorPool failed: %d\n", res);
+    goto out;
+  }
 
   /* create gears */
 
@@ -807,7 +955,11 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
 
   vkCmdEndRenderPass(gears->commandBuffer);
 
-  vkEndCommandBuffer(gears->commandBuffer);
+  res = vkEndCommandBuffer(gears->commandBuffer);
+  if (res) {
+    printf("vkEndCommandBuffer failed: %d\n", res);
+    goto out;
+  }
 
   memset(gears->Projection, 0, sizeof(gears->Projection));
   gears->Projection[0] = zNear;
@@ -828,6 +980,63 @@ out:
   if (gears->gear1) {
     delete_gear(gears, 1);
   }
+  if (gears->descriptorPool) {
+    vkDestroyDescriptorPool(gears->device, gears->descriptorPool, NULL);
+  }
+  if (gears->commandBuffer) {
+    vkFreeCommandBuffers(gears->device, gears->commandPool, 1, &gears->commandBuffer);
+  }
+  if (gears->commandPool) {
+    vkDestroyCommandPool(gears->device, gears->commandPool, NULL);
+  }
+  if (gears->sampler) {
+    vkDestroySampler(gears->device, gears->sampler, NULL);
+  }
+  if (gears->texture) {
+    vkDestroyImageView(gears->device, gears->texture, NULL);
+  }
+  if (texture_data) {
+    vkUnmapMemory(gears->device, gears->textureMemory);
+  }
+  if (gears->textureMemory) {
+    vkFreeMemory(gears->device, gears->textureMemory, NULL);
+  }
+  if (gears->textureImage) {
+    vkDestroyImage(gears->device, gears->textureImage, NULL);
+  }
+  if (gears->pipeline) {
+    vkDestroyPipeline(gears->device, gears->pipeline, NULL);
+  }
+  if (gears->pipelineLayout) {
+    vkDestroyPipelineLayout(gears->device, gears->pipelineLayout, NULL);
+  }
+  if (gears->descriptorSetLayout) {
+    vkDestroyDescriptorSetLayout(gears->device, gears->descriptorSetLayout, NULL);
+  }
+  if (fragShaderModule) {
+    vkDestroyShaderModule(gears->device, fragShaderModule, NULL);
+  }
+  if (vertShaderModule) {
+    vkDestroyShaderModule(gears->device, vertShaderModule, NULL);
+  }
+  if (gears->renderPass) {
+    vkDestroyRenderPass(gears->device, gears->renderPass, NULL);
+  }
+  if (gears->framebuffer) {
+    vkDestroyFramebuffer(gears->device, gears->framebuffer, NULL);
+  }
+  if (gears->imageView[1]) {
+    vkDestroyImageView(gears->device, gears->imageView[1], NULL);
+  }
+  if (gears->imageView[0]) {
+    vkDestroyImageView(gears->device, gears->imageView[0], NULL);
+  }
+  if (gears->depthMemory) {
+    vkFreeMemory(gears->device, gears->depthMemory, NULL);
+  }
+  if (gears->depthImage) {
+    vkDestroyImage(gears->device, gears->depthImage, NULL);
+  }
   free(gears);
   return NULL;
 }
@@ -837,6 +1046,7 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   const float red[4] = { 0.8, 0.1, 0.0, 1.0 };
   const float green[4] = { 0.0, 0.8, 0.2, 1.0 };
   const float blue[4] = { 0.2, 0.2, 1.0, 1.0 };
+  VkResult res = VK_SUCCESS;
   VkSubmitInfo submitInfo;
 
   if (!gears) {
@@ -855,7 +1065,10 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   memset(&submitInfo, 0, sizeof(VkSubmitInfo));
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &gears->commandBuffer;
-  vkQueueSubmit(queue, 1, &submitInfo, NULL);
+  res = vkQueueSubmit(queue, 1, &submitInfo, NULL);
+  if (res) {
+    printf("vkEndCommandBuffer failed: %d\n", res);
+  }
 }
 
 void vk_gears_term(gears_t *gears)

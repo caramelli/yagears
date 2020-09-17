@@ -61,12 +61,6 @@ void glutExit();
 #include <QtGui>
 #endif
 #endif
-#if defined(FLTK)
-#include <FL/Fl.H>
-#include <FL/Fl_Gl_Window.H>
-void fl_open_display();
-void fl_close_display();
-#endif
 #if defined(SDL)
 #include <SDL.h>
 #endif
@@ -76,6 +70,12 @@ void fl_close_display();
 #if defined(WX)
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
+#endif
+#if defined(FLTK)
+#include <FL/Fl.H>
+#include <FL/Fl_Gl_Window.H>
+void fl_open_display();
+void fl_close_display();
 #endif
 
 #include "gears_engine.h"
