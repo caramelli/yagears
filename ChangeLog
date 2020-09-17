@@ -1,3 +1,15 @@
+commit fdcb5722edf2150228c42fc74d69e9d8bfd09e88
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Sep 18 00:01:18 2020 +0200
+
+    handle Vulkan error, add CMake build system
+
+commit e85a2beaa60062e1521124fca97c28eef728385f
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed Aug 19 10:19:31 2020 +0200
+
+    update ChangeLog
+
 commit 86a4f28d4b9d29c9d8e4d9b746dc51fa28869f0d
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Wed Aug 19 10:19:16 2020 +0200
