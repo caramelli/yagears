@@ -1,3 +1,15 @@
+commit 9634e4e890c312585bc8bc80253944e1c79f6b13
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 22 16:15:38 2020 +0100
+
+    add XCB support
+
+commit 5be911113c5ed61b8350a96c759f8b723d983df2
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Sep 27 06:40:07 2019 +0200
+
+    update ChangeLog
+
 commit 8cbf51e2fd576096b45712e3fc249c5b08c2dbd8
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Fri Sep 27 06:39:48 2019 +0200
