@@ -1,3 +1,15 @@
+commit facca563aaeca07b70d3d4ecee80099a9fcc6fad
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 22 12:00:16 2020 +0100
+
+    add Vulkan GUI (GLFW, SDL2 support)
+
+commit 19df2a11cdc70915dcfac6b3aa3fc1e395b82aab
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Sep 18 00:01:44 2020 +0200
+
+    update ChangeLog
+
 commit fdcb5722edf2150228c42fc74d69e9d8bfd09e88
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Fri Sep 18 00:01:18 2020 +0200
