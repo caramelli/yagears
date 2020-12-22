@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -32,12 +32,6 @@
 
 #if defined(EFL)
 #include <Elementary.h>
-#endif
-#if defined(FLTK)
-#include <FL/Fl.H>
-#include <FL/Fl_Gl_Window.H>
-void fl_open_display();
-void fl_close_display();
 #endif
 #if defined(GLFW)
 #include <GLFW/glfw3.h>
@@ -76,6 +70,12 @@ void glutExit();
 #if defined(WX)
 #include <wx/wx.h>
 #include <wx/glcanvas.h>
+#endif
+#if defined(FLTK)
+#include <FL/Fl.H>
+#include <FL/Fl_Gl_Window.H>
+void fl_open_display();
+void fl_close_display();
 #endif
 
 #include "gears_engine.h"
@@ -176,6 +176,14 @@ static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
     else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Left")) {
       view_ry += 5.0;
     }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "t")) {
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+    }
     else {
       return EINA_FALSE;
     }
@@ -255,6 +263,14 @@ int handle(int event)
     case FL_Left:
       view_ry += 5.0;
       break;
+    case 't':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return 0;
   }
@@ -274,6 +290,7 @@ static void glfwDisplay(GLFWwindow *window)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   glfwSwapBuffers(window);
 }
 
@@ -321,6 +338,14 @@ static void glfwKeyCallback(GLFWwindow *window, int key, int scancode, int actio
     case GLFW_KEY_LEFT:
       view_ry += 5.0;
       break;
+    case GLFW_KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -338,6 +363,7 @@ static void glutDisplay()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   glutSwapBuffers();
 }
 
@@ -363,6 +389,14 @@ static void glutKeyboard(unsigned char key, int x, int y)
       animate = !animate;
       if (animate) {
         glutPostRedisplay();
+      }
+      break;
+    case 't':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
       }
       break;
     default:
@@ -407,12 +441,9 @@ static gboolean gtk_render(GtkWidget *widget)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   #if !GTK_CHECK_VERSION(3,16,0)
-  #if GTK_CHECK_VERSION(3,0,0)
   gtk_gl_area_swap_buffers(GTK_GL_AREA(widget));
-  #else
-  gtk_gl_area_swapbuffers(GTK_GL_AREA(widget));
-  #endif
   #endif
 
   return TRUE;
@@ -461,6 +492,14 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
       break;
     case GDK_Left:
       view_ry += 5.0;
+      break;
+    case GDK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return FALSE;
@@ -532,6 +571,14 @@ void keyPressEvent(QKeyEvent *event)
     case Qt::Key_Left:
       view_ry += 5.0;
       break;
+    case Qt::Key_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -553,6 +600,7 @@ static void SDL_Display()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   #if SDL_VERSION_ATLEAST(2, 0, 0)
   SDL_GL_SwapWindow(window);
   #else
@@ -623,6 +671,14 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
     case SDLK_LEFT:
       view_ry += 5.0;
       break;
+    case SDLK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -652,6 +708,7 @@ void draw()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   display();
 }
 
@@ -700,6 +757,14 @@ void keyPressedEvent(sf::Event &event)
     case sf::Keyboard::Left:
       view_ry += 5.0;
       break;
+    case sf::Keyboard::T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -736,6 +801,7 @@ void WxPaintEventHandler(wxPaintEvent &event)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   if (!glcontext)
     glcontext = new WxGLContext(this);
   SwapBuffers();
@@ -782,6 +848,14 @@ void WxKeyEventHandler(wxKeyEvent &event)
       break;
     case WXK_LEFT:
       view_ry += 5.0;
+      break;
+    case 'T':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;
@@ -909,9 +983,9 @@ int main(int argc, char *argv[])
   }
 
   if (argc != 5 || !toolkit_arg || !engine_arg) {
-    printf("\n\tUsage: %s -t toolkit -e engine\n\n", argv[0]);
-    printf("\t\ttoolkits: %s\n\n", toolkits);
-    printf("\t\tengines:  ");
+    printf("\n\tUsage: %s -t Toolkit -e Engine\n\n", argv[0]);
+    printf("\t\tToolkits: %s\n\n", toolkits);
+    printf("\t\tEngines:  ");
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
@@ -929,7 +1003,7 @@ int main(int argc, char *argv[])
   }
 
   if (!c) {
-    printf("%s: toolkit unknown\n", toolkit_arg);
+    printf("%s: Toolkit unknown\n", toolkit_arg);
     return EXIT_FAILURE;
   }
 
@@ -939,7 +1013,7 @@ int main(int argc, char *argv[])
   }
 
   if (opt == gears_engine_nb()) {
-    printf("%s: engine unknown\n", engine_arg);
+    printf("%s: Engine unknown\n", engine_arg);
     return EXIT_FAILURE;
   }
 

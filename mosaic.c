@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -82,7 +82,7 @@ static void rotate(int n)
 
 static void glutDisplay()
 {
-  int n = (int)glutGetWindowData();
+  int n = (long)glutGetWindowData();
 
   if (animate) { if (frames) rotate(n); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine[n], view_tz[n], view_rx[n], view_ry[n], model_rz[n]);
@@ -121,7 +121,7 @@ static void glutKeyboard(unsigned char key, int x, int y)
 
 static void glutSpecial(int key, int x, int y)
 {
-  int n = (int)glutGetWindowData();
+  int n = (long)glutGetWindowData();
 
   switch (key) {
     case GLUT_KEY_PAGE_DOWN:
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
   int glut_win[COLS * ROWS];
 
   if (argc != 2) {
-    printf("\n\tUsage: %s engine : ", argv[0]);
+    printf("\n\tUsage: %s Engine : ", argv[0]);
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
   }
 
   if (opt == gears_engine_nb()) {
-    printf("%s: engine unknown\n", argv[1]);
+    printf("%s: Engine unknown\n", argv[1]);
     return EXIT_FAILURE;
   }
 
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
       gears_engine[i * COLS + j] = gears_engine_new(gears_engine_name(opt));
       glutInitWindowPosition(win_posx, win_posy);
       glut_win[i * COLS + j] = glutCreateWindow(NULL);
-      glutSetWindowData((void *)(i * COLS + j));
+      glutSetWindowData((void *)(long)(i * COLS + j));
       glutDisplayFunc(glutDisplay);
       glutIdleFunc(glutIdle);
       glutKeyboardFunc(glutKeyboard);

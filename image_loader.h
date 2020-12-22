@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -21,11 +21,4 @@
   THE SOFTWARE.
 */
 
-typedef struct {
-  int width;
-  int height;
-  unsigned char *pixel_data;
-} image_t;
-
-void image_load(char *filename, image_t *image);
-void image_unload(image_t *image);
+void image_load(char *filename, unsigned char *image_data, int *image_width, int *image_height);

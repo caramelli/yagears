@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -124,6 +124,7 @@ void gears_engine_term(gears_engine_t *gears_engine)
   }
 
   gears_engine->engine->term(gears_engine->gears);
+  gears_engine->gears = NULL;
 }
 
 void gears_engine_free(gears_engine_t *gears_engine)

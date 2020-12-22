@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2019  Nicolas Caramelli
+  Copyright (C) 2013-2020  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -52,26 +52,21 @@ static int magic_read(char *filename, char *magic, int magic_size)
   return 0;
 }
 
-static int image_read(char *filename, loader_t *loader, image_t *image)
+static int image_read(char *filename, loader_t *loader, unsigned char *image_data, int *image_width, int *image_height)
 {
-  handle_t *handle = loader->init(filename, &image->width, &image->height);
+  handle_t *handle = loader->init(filename, image_width, image_height);
   if (!handle) {
     return -1;
   }
-  else {
-    image->pixel_data = malloc(image->width * image->height * 4);
-    if (!image->pixel_data) {
-      printf("malloc pixel_data failed\n");
-      return -1;
-    }
-    loader->read(handle, image->pixel_data);
+  else if (image_data) {
+    loader->read(handle, image_data);
   }
   loader->fini(handle);
 
   return 0;
 }
 
-void image_load(char *filename, image_t *image)
+void image_load(char *filename, unsigned char *image_data, int *image_width, int *image_height)
 {
   char magic[4];
   loader_t *loader = NULL;
@@ -89,22 +84,17 @@ void image_load(char *filename, image_t *image)
     }
 
     if (loader) {
-      if (image_read(filename, loader, image) == -1) {
+      if (image_read(filename, loader, image_data, image_width, image_height) == -1) {
         loader = NULL;
       }
     }
   }
 
   if (!loader) {
-    image->width = tux_image.width;
-    image->height = tux_image.height;
-    image->pixel_data = (unsigned char *)tux_image.pixel_data;
-  }
-}
-
-void image_unload(image_t *image)
-{
-  if (image->pixel_data != tux_image.pixel_data) {
-    free(image->pixel_data);
+    *image_width = tux_image.width;
+    *image_height = tux_image.height;
+    if (image_data) {
+      memcpy(image_data, (unsigned char *)tux_image.pixel_data, tux_image.width * tux_image.height * 4);
+    }
   }
 }
