@@ -15,7 +15,15 @@ OpenGL ES 1.1 CM and 2.0 ports) that supports multiple OpenGL Backends:
   - EGL interface for DRM
   - EGL interface for Raspberry Pi Dispmanx
 
-and multiple Graphical User Interface Toolkits:
+The package also provides a Vulkan port that supports multiple Vulkan WSIs:
+
+  - Vulkan extension for Xlib (Xlib WSI)
+  - Vulkan extension for DirectFB (DirectFB WSI)
+  - Vulkan extension for Linux Framebuffer (FBDev WSI)
+  - Vulkan extension for Wayland (Wayland WSI)
+  - Vulkan extension for XCB (XCB WSI)
+
+The demo can work with multiple Graphical User Interface Toolkits:
 
   - EFL (Enlightenment Foundation Libraries)
   - FLTK (Fast Light ToolKit)
@@ -26,14 +34,6 @@ and multiple Graphical User Interface Toolkits:
   - SDL (Simple Directmedia Layer)
   - SFML (Simple and Fast Multimedia Library)
   - wxWidgets (Windows X Widgets)
-
-The package also provides a Vulkan port that supports multiple Vulkan WSIs:
-
-  - Vulkan extension for Xlib (Xlib WSI)
-  - Vulkan extension for DirectFB (DirectFB WSI)
-  - Vulkan extension for Linux Framebuffer (FBDev WSI)
-  - Vulkan extension for Wayland (Wayland WSI)
-  - Vulkan extension for XCB (XCB WSI)
 
 Have fun,
 

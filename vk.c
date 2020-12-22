@@ -516,8 +516,8 @@ int main(int argc, char *argv[])
   VkXcbSurfaceCreateInfoKHR xcb_surface_create_info;
   #endif
   const char *vk_extension_name = NULL;
-  VkInstance vk_instance = VK_NULL_HANDLE;
   VkInstanceCreateInfo vk_instance_create_info;
+  VkInstance vk_instance = VK_NULL_HANDLE;
   uint32_t vk_physical_devices_count;
   VkPhysicalDevice *vk_physical_devices = NULL, vk_physical_device = VK_NULL_HANDLE;
   VkSurfaceKHR vk_surface = VK_NULL_HANDLE;
@@ -730,8 +730,6 @@ int main(int argc, char *argv[])
     win_posy = atoi(getenv("POSY"));
   }
 
-  /* create instance and set physical device */
-
   #if defined(VK_X11)
   if (!strcmp(wsi, "vk-x11")) {
     vk_extension_name = VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
@@ -757,34 +755,6 @@ int main(int argc, char *argv[])
     vk_extension_name = VK_KHR_XCB_SURFACE_EXTENSION_NAME;
   }
   #endif
-  memset(&vk_instance_create_info, 0, sizeof(VkInstanceCreateInfo));
-  vk_instance_create_info.enabledExtensionCount = 1;
-  vk_instance_create_info.ppEnabledExtensionNames = &vk_extension_name;
-  err = vkCreateInstance(&vk_instance_create_info, NULL, &vk_instance);
-  if (err) {
-    printf("vkCreateInstance failed: %d\n", err);
-    goto out;
-  }
-
-  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, NULL);
-  if (err || !vk_physical_devices_count) {
-    printf("vkEnumeratePhysicalDevices failed: %d, %d\n", err, vk_physical_devices_count);
-    goto out;
-  }
-
-  vk_physical_devices = calloc(vk_physical_devices_count, sizeof(VkPhysicalDevice));
-  if (!vk_physical_devices) {
-    printf("calloc failed: %s\n", strerror(errno));
-    goto out;
-  }
-
-  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, vk_physical_devices);
-  if (err) {
-    printf("vkEnumeratePhysicalDevices failed: %d\n", err);
-    goto out;
-  }
-
-  vk_physical_device = vk_physical_devices[0];
 
   /* create window associated to the display */
 
@@ -910,7 +880,9 @@ int main(int argc, char *argv[])
   if (!strcmp(wsi, "vk-xcb")) {
     xcb_win = xcb_generate_id(xcb_dpy);
     xcb_event_mask = XCB_EVENT_MASK_KEY_PRESS;
-    xcb_cookie = xcb_create_window_checked(xcb_dpy, XCB_COPY_FROM_PARENT, xcb_win, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root, win_posx, win_posy, win_width, win_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root_visual, XCB_CW_EVENT_MASK, &xcb_event_mask);
+    xcb_value_list[0] = 0;
+    xcb_value_list[1] = xcb_event_mask;
+    xcb_cookie = xcb_create_window_checked(xcb_dpy, XCB_COPY_FROM_PARENT, xcb_win, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root, win_posx, win_posy, win_width, win_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->root_visual, XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK, xcb_value_list);
     xcb_win = xcb_request_check(xcb_dpy, xcb_cookie) ? -1 : xcb_win;
     if (xcb_win == -1) {
       printf("xcb_create_window failed\n");
@@ -926,6 +898,37 @@ int main(int argc, char *argv[])
     xcb_flush(xcb_dpy);
   }
   #endif
+
+  /* create instance and set physical device */
+
+  memset(&vk_instance_create_info, 0, sizeof(VkInstanceCreateInfo));
+  vk_instance_create_info.enabledExtensionCount = 1;
+  vk_instance_create_info.ppEnabledExtensionNames = &vk_extension_name;
+  err = vkCreateInstance(&vk_instance_create_info, NULL, &vk_instance);
+  if (err) {
+    printf("vkCreateInstance failed: %d\n", err);
+    goto out;
+  }
+
+  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, NULL);
+  if (err || !vk_physical_devices_count) {
+    printf("vkEnumeratePhysicalDevices failed: %d, %d\n", err, vk_physical_devices_count);
+    goto out;
+  }
+
+  vk_physical_devices = calloc(vk_physical_devices_count, sizeof(VkPhysicalDevice));
+  if (!vk_physical_devices) {
+    printf("calloc failed: %s\n", strerror(errno));
+    goto out;
+  }
+
+  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, vk_physical_devices);
+  if (err) {
+    printf("vkEnumeratePhysicalDevices failed: %d\n", err);
+    goto out;
+  }
+
+  vk_physical_device = vk_physical_devices[0];
 
   /* create surface */
 

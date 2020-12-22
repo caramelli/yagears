@@ -176,6 +176,14 @@ static Eina_Bool ecore_event_key_down(void *widget, int type, void *event)
     else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "Left")) {
       view_ry += 5.0;
     }
+    else if (!strcmp(((Ecore_Event_Key *)event)->keyname, "t")) {
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+    }
     else {
       return EINA_FALSE;
     }
@@ -255,6 +263,14 @@ int handle(int event)
     case FL_Left:
       view_ry += 5.0;
       break;
+    case 't':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return 0;
   }
@@ -274,6 +290,7 @@ static void glfwDisplay(GLFWwindow *window)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   glfwSwapBuffers(window);
 }
 
@@ -321,6 +338,14 @@ static void glfwKeyCallback(GLFWwindow *window, int key, int scancode, int actio
     case GLFW_KEY_LEFT:
       view_ry += 5.0;
       break;
+    case GLFW_KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -338,6 +363,7 @@ static void glutDisplay()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   glutSwapBuffers();
 }
 
@@ -363,6 +389,14 @@ static void glutKeyboard(unsigned char key, int x, int y)
       animate = !animate;
       if (animate) {
         glutPostRedisplay();
+      }
+      break;
+    case 't':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
       }
       break;
     default:
@@ -407,6 +441,7 @@ static gboolean gtk_render(GtkWidget *widget)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   #if !GTK_CHECK_VERSION(3,16,0)
   gtk_gl_area_swap_buffers(GTK_GL_AREA(widget));
   #endif
@@ -457,6 +492,14 @@ static gboolean gtk_key_press_event(GtkWidget *widget, GdkEventKey *event, gpoin
       break;
     case GDK_Left:
       view_ry += 5.0;
+      break;
+    case GDK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return FALSE;
@@ -528,6 +571,14 @@ void keyPressEvent(QKeyEvent *event)
     case Qt::Key_Left:
       view_ry += 5.0;
       break;
+    case Qt::Key_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -549,6 +600,7 @@ static void SDL_Display()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   #if SDL_VERSION_ATLEAST(2, 0, 0)
   SDL_GL_SwapWindow(window);
   #else
@@ -619,6 +671,14 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
     case SDLK_LEFT:
       view_ry += 5.0;
       break;
+    case SDLK_t:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -648,6 +708,7 @@ void draw()
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   display();
 }
 
@@ -696,6 +757,14 @@ void keyPressedEvent(sf::Event &event)
     case sf::Keyboard::Left:
       view_ry += 5.0;
       break;
+    case sf::Keyboard::T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
     default:
       return;
   }
@@ -732,6 +801,7 @@ void WxPaintEventHandler(wxPaintEvent &event)
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
+
   if (!glcontext)
     glcontext = new WxGLContext(this);
   SwapBuffers();
@@ -778,6 +848,14 @@ void WxKeyEventHandler(wxKeyEvent &event)
       break;
     case WXK_LEFT:
       view_ry += 5.0;
+      break;
+    case 'T':
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
       break;
     default:
       return;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(yagears VERSION 2.3)
+project(yagears VERSION 2.4)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -158,7 +158,7 @@ set(GL_FBDEV ${ENABLE_GL_FBDEV})
 if(ENABLE_EGL_X11 OR ENABLE_EGL_DIRECTFB OR ENABLE_EGL_FBDEV OR ENABLE_EGL_WAYLAND OR ENABLE_EGL_XCB OR ENABLE_EGL_DRM OR ENABLE_EGL_RPI)
   pkg_check_modules(EGL egl)
   if(EGL_FOUND)
-    list(APPEND EGL_CFLAGS -DEGL_NO_X11 -DEGL_EGLEXT_PROTOTYPES)
+    list(APPEND EGL_CFLAGS -DEGL_NO_PLATFORM_SPECIFIC_TYPES -DEGL_EGLEXT_PROTOTYPES)
 
     if(ENABLE_EGL_X11)
       if(NOT ENABLE_GL_X11)
@@ -594,6 +594,12 @@ else()
   set(GUI OFF)
 endif()
 
+if((ENABLE_VK_X11 OR ENABLE_VK_DIRECTFB OR ENABLE_VK_FBDEV OR ENABLE_VK_WAYLAND OR ENABLE_VK_XCB) AND (ENABLE_GLFW OR ENABLE_SDL))
+  set(VK_GUI ON)
+else()
+  set(VK_GUI OFF)
+endif()
+
 set(PNG ${ENABLE_PNG})
 set(TIFF ${ENABLE_TIFF})
 
@@ -653,4 +659,11 @@ add_executable(yagears2-gui gui.cc)
 target_compile_options(yagears2-gui PRIVATE ${EFL_CFLAGS} ${FLTK_CFLAGS} ${GLFW_CFLAGS} ${GLUT_CFLAGS} ${GTK_CFLAGS} ${QT_CFLAGS} ${SDL_CFLAGS} ${SFML_CFLAGS} ${WX_CFLAGS})
 target_link_libraries(yagears2-gui -Wl,--whole-archive yagears -Wl,--no-whole-archive ${EFL_LDFLAGS} ${FLTK_LDFLAGS} ${GLFW_LDFLAGS} ${GLUT_LDFLAGS} ${GTK_LDFLAGS} ${QT_LDFLAGS} ${SDL_LDFLAGS} ${SFML_LDFLAGS} ${WX_LDFLAGS})
 install(TARGETS yagears2-gui DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+if(VK_GUI)
+add_executable(yagears2-vk-gui vk-gui.cc vulkan_gears.c image_loader.c ${PNG_SOURCE} ${TIFF_SOURCE})
+target_compile_options(yagears2-vk-gui PRIVATE ${VULKAN_CFLAGS} ${PNG_CFLAGS} ${TIFF_CFLAGS} ${GLFW_CFLAGS} ${SDL_CFLAGS})
+target_link_libraries(yagears2-vk-gui ${VULKAN_LDFLAGS} ${PNG_LDFLAGS} ${TIFF_LDFLAGS} ${GLFW_LDFLAGS} ${SDL_LDFLAGS})
+install(TARGETS yagears2-vk-gui DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

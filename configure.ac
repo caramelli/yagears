@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.3)
+AC_INIT(yagears, 2.4)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -217,7 +217,7 @@ fi
 if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_fbdev = xyes -o x$enable_egl_wayland = xyes -o x$enable_egl_xcb = xyes -o x$enable_egl_drm -o x$enable_egl_rpi; then
   PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
   if test x$enable_egl = xyes; then
-    EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_X11 -DEGL_EGLEXT_PROTOTYPES"
+    EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_PLATFORM_SPECIFIC_TYPES -DEGL_EGLEXT_PROTOTYPES"
 
     if test x$enable_egl_x11 = xyes; then
       if test x$enable_gl_x11 = xno; then
@@ -584,6 +584,8 @@ AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o
 AM_CONDITIONAL(MOSAIC, test x$enable_glut = xyes)
 
 AM_CONDITIONAL(GUI, test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable_glfw = xyes -o x$enable_glut = xyes -o x$enable_gtk = xyes -o x$enable_qt = xyes -o x$enable_sdl = xyes -o x$enable_sfml = xyes -o x$enable_wx = xyes)
+
+AM_CONDITIONAL(VK_GUI, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes && test x$enable_glfw = xyes -o x$enable_sdl = xyes)
 
 AM_CONDITIONAL(PNG, test x$enable_png = xyes)
 AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)

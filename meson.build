@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.3')
+project('yagears', 'c', 'cpp', version: '2.4')
 
 config_h = configuration_data()
 
@@ -157,7 +157,7 @@ rpi_dep = []
 if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayland or enable_egl_xcb or enable_egl_drm or enable_egl_rpi
   egl_dep = dependency('egl', required: false)
   if egl_dep.found()
-    egl_dep = declare_dependency(compile_args: ['-DEGL_NO_X11', '-DEGL_EGLEXT_PROTOTYPES'], dependencies: egl_dep)
+    egl_dep = declare_dependency(compile_args: ['-DEGL_NO_PLATFORM_SPECIFIC_TYPES', '-DEGL_EGLEXT_PROTOTYPES'], dependencies: egl_dep)
 
     if enable_egl_x11
       if not enable_gl_x11
@@ -593,6 +593,12 @@ else
   GUI = false
 endif
 
+if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb) and (enable_glfw or enable_sdl)
+  VK_GUI = true
+else
+  VK_GUI = false
+endif
+
 PNG = enable_png
 TIFF = enable_tiff
 
@@ -659,5 +665,12 @@ executable('yagears2-gui',
            'gui.cc',
            dependencies: [efl_dep, fltk_dep, glfw_dep, glut_dep, gtk_dep, qt_dep, sdl_dep, sfml_dep, wx_dep],
            link_whole: libyagears,
+           install: true)
+endif
+
+if VK_GUI
+executable('yagears2-vk-gui',
+           'vk-gui.cc', 'vulkan_gears.c', 'image_loader.c', png_source, tiff_source,
+           dependencies: [vulkan_dep, png_dep, tiff_dep, glfw_dep, sdl_dep],
            install: true)
 endif

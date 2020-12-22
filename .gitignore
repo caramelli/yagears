@@ -1,6 +1,9 @@
 aclocal.m4
 autom4te.cache
 build
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
 compile
 config.guess
 config.h
@@ -17,6 +20,7 @@ INSTALL
 install-sh
 .libs
 libtool
+libyagears.a
 ltmain.sh
 Makefile
 Makefile.in

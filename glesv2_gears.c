@@ -551,6 +551,10 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   }
 
   code = fragShaderSource;
+  if (strstr((char *)gears->glGetString(GL_SHADING_LANGUAGE_VERSION), "1.20") ||
+      strstr((char *)gears->glGetString(GL_SHADING_LANGUAGE_VERSION), "1.30")) {
+    code += strlen("precision mediump float;\n");
+  }
   gears->glShaderSource(fragShader, 1, &code, NULL);
 
   gears->glCompileShader(fragShader);
