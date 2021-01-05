@@ -55,6 +55,9 @@
 /* Support for SFML graphical user interface */
 #cmakedefine SFML
 
+/* Support for D2D WSI */
+#cmakedefine VK_D2D
+
 /* Support for DirectFB WSI */
 #cmakedefine VK_DIRECTFB
 

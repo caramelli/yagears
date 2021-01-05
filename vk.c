@@ -23,7 +23,6 @@
 
 #include "config.h"
 
-#include <errno.h>
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -55,6 +54,10 @@
 #if defined(VK_XCB)
 #include <xcb/xcb.h>
 #define VK_USE_PLATFORM_XCB_KHR
+#endif
+#if defined(VK_D2D)
+#include <fcntl.h>
+#include <libevdev/libevdev.h>
 #endif
 #include <vulkan/vulkan.h>
 
@@ -462,6 +465,58 @@ static void xcb_keyboard_handle_key(xcb_generic_event_t *event)
 }
 #endif
 
+#if defined(VK_D2D)
+static void d2d_keyboard_handle_key(struct input_event *event)
+{
+  switch (event->code) {
+    case KEY_ESC:
+      sighandler(SIGTERM);
+      return;
+    case KEY_SPACE:
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case KEY_PAGEDOWN:
+      view_tz -= -5.0;
+      break;
+    case KEY_PAGEUP:
+      view_tz += -5.0;
+      break;
+    case KEY_DOWN:
+      view_rx -= 5.0;
+      break;
+    case KEY_UP:
+      view_rx += 5.0;
+      break;
+    case KEY_RIGHT:
+      view_ry -= 5.0;
+      break;
+    case KEY_LEFT:
+      view_ry += 5.0;
+      break;
+    case KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+}
+#endif
+
 /******************************************************************************/
 
 int main(int argc, char *argv[])
@@ -515,6 +570,17 @@ int main(int argc, char *argv[])
   xcb_generic_event_t *xcb_event = NULL;
   VkXcbSurfaceCreateInfoKHR xcb_surface_create_info;
   #endif
+  #if defined(VK_D2D)
+  VkDisplayModeKHR d2d_dpy = VK_NULL_HANDLE;
+  VkExtent2D d2d_win = { 0, 0 };
+  uint32_t d2d_properties_count, d2d_mode_properties_count;
+  VkDisplayPropertiesKHR *d2d_properties = NULL;
+  VkDisplayModePropertiesKHR *d2d_mode_properties = NULL;
+  int d2d_keyboard = -1;
+  struct libevdev *d2d_evdev = NULL;
+  struct input_event d2d_event;
+  VkDisplaySurfaceCreateInfoKHR d2d_surface_create_info;
+  #endif
   const char *vk_extension_name = NULL;
   VkInstanceCreateInfo vk_instance_create_info;
   VkInstance vk_instance = VK_NULL_HANDLE;
@@ -548,6 +614,9 @@ int main(int argc, char *argv[])
   #if defined(VK_XCB)
   strcat(wsis, "vk-xcb ");
   #endif
+  #if defined(VK_D2D)
+  strcat(wsis, "vk-d2d ");
+  #endif
 
   while ((opt = getopt(argc, argv, "w:h")) != -1) {
     switch (opt) {
@@ -579,6 +648,68 @@ int main(int argc, char *argv[])
     printf("%s: WSI unknown\n", wsi_arg);
     return EXIT_FAILURE;
   }
+
+  /* create instance and set physical device */
+
+  #if defined(VK_X11)
+  if (!strcmp(wsi, "vk-x11")) {
+    vk_extension_name = VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_DIRECTFB)
+  if (!strcmp(wsi, "vk-directfb")) {
+    vk_extension_name = VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_FBDEV)
+  if (!strcmp(wsi, "vk-fbdev")) {
+    vk_extension_name = VK_EXT_FBDEV_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_WAYLAND)
+  if (!strcmp(wsi, "vk-wayland")) {
+    vk_extension_name = VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_XCB)
+  if (!strcmp(wsi, "vk-xcb")) {
+    vk_extension_name = VK_KHR_XCB_SURFACE_EXTENSION_NAME;
+  }
+  #endif
+  #if defined(VK_D2D)
+  if (!strcmp(wsi, "vk-d2d")) {
+    vk_extension_name = VK_KHR_DISPLAY_EXTENSION_NAME;
+  }
+  #endif
+
+  memset(&vk_instance_create_info, 0, sizeof(VkInstanceCreateInfo));
+  vk_instance_create_info.enabledExtensionCount = 1;
+  vk_instance_create_info.ppEnabledExtensionNames = &vk_extension_name;
+  err = vkCreateInstance(&vk_instance_create_info, NULL, &vk_instance);
+  if (err) {
+    printf("vkCreateInstance failed: %d\n", err);
+    goto out;
+  }
+
+  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, NULL);
+  if (err || !vk_physical_devices_count) {
+    printf("vkEnumeratePhysicalDevices failed: %d, %d\n", err, vk_physical_devices_count);
+    goto out;
+  }
+
+  vk_physical_devices = calloc(vk_physical_devices_count, sizeof(VkPhysicalDevice));
+  if (!vk_physical_devices) {
+    printf("calloc failed: %m\n");
+    goto out;
+  }
+
+  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, vk_physical_devices);
+  if (err) {
+    printf("vkEnumeratePhysicalDevices failed: %d\n", err);
+    goto out;
+  }
+
+  vk_physical_device = vk_physical_devices[0];
 
   /* open display */
 
@@ -633,14 +764,14 @@ int main(int argc, char *argv[])
     if (getenv("FRAMEBUFFER")) {
       fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
       if (fb_dpy == -1) {
-        printf("open %s failed: %s\n", getenv("FRAMEBUFFER"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("FRAMEBUFFER"));
         goto out;
       }
     }
     else {
       fb_dpy = open("/dev/fb0", O_RDWR);
       if (fb_dpy == -1) {
-        printf("open /dev/fb0 failed: %s\n", strerror(errno));
+        printf("open /dev/fb0 failed: %m\n");
         goto out;
       }
     }
@@ -648,14 +779,14 @@ int main(int argc, char *argv[])
     memset(&fb_finfo, 0, sizeof(struct fb_fix_screeninfo));
     err = ioctl(fb_dpy, FBIOGET_FSCREENINFO, &fb_finfo);
     if (err == -1) {
-      printf("ioctl FBIOGET_FSCREENINFO failed: %s\n", strerror(errno));
+      printf("ioctl FBIOGET_FSCREENINFO failed: %m\n");
       goto out;
     }
 
     memset(&fb_vinfo, 0, sizeof(struct fb_var_screeninfo));
     err = ioctl(fb_dpy, FBIOGET_VSCREENINFO, &fb_vinfo);
     if (err == -1) {
-      printf("ioctl FBIOGET_VSCREENINFO failed: %s\n", strerror(errno));
+      printf("ioctl FBIOGET_VSCREENINFO failed: %m\n");
       goto out;
     }
 
@@ -713,6 +844,50 @@ int main(int argc, char *argv[])
     win_height = xcb_setup_roots_iterator(xcb_get_setup(xcb_dpy)).data->height_in_pixels;
   }
   #endif
+  #if defined(VK_D2D)
+  if (!strcmp(wsi, "vk-d2d")) {
+    err = vkGetPhysicalDeviceDisplayPropertiesKHR(vk_physical_device, &d2d_properties_count, NULL);
+    if (err || !d2d_properties_count) {
+      printf("vkGetPhysicalDeviceDisplayPropertiesKHR failed: %d, %d\n", err, vk_physical_devices_count);
+      goto out;
+    }
+
+    d2d_properties = calloc(vk_physical_devices_count, sizeof(VkDisplayPropertiesKHR));
+    if (!d2d_properties) {
+      printf("calloc failed: %m\n");
+      goto out;
+    }
+
+    err = vkGetPhysicalDeviceDisplayPropertiesKHR(vk_physical_device, &d2d_properties_count, d2d_properties);
+    if (err) {
+      printf("vkGetPhysicalDeviceDisplayPropertiesKHR failed: %d\n", err);
+      goto out;
+    }
+
+    err = vkGetDisplayModePropertiesKHR(vk_physical_device, d2d_properties[0].display, &d2d_mode_properties_count, NULL);
+    if (err || !d2d_mode_properties_count) {
+      printf("vkGetPhysicalDeviceDisplayPropertiesKHR failed: %d, %d\n", err, vk_physical_devices_count);
+      goto out;
+    }
+
+    d2d_mode_properties = calloc(d2d_mode_properties_count, sizeof(VkDisplayModePropertiesKHR));
+    if (!d2d_mode_properties) {
+      printf("calloc failed: %m\n");
+      goto out;
+    }
+
+    err = vkGetDisplayModePropertiesKHR(vk_physical_device, d2d_properties[0].display, &d2d_mode_properties_count, d2d_mode_properties);
+    if (err) {
+      printf("vkGetDisplayModePropertiesKHR failed: %d\n", err);
+      goto out;
+    }
+
+    d2d_dpy = d2d_mode_properties[0].displayMode;
+
+    win_width = d2d_mode_properties[0].parameters.visibleRegion.width;
+    win_height = d2d_mode_properties[0].parameters.visibleRegion.height;
+  }
+  #endif
 
   if (getenv("WIDTH")) {
     win_width = atoi(getenv("WIDTH"));
@@ -729,32 +904,6 @@ int main(int argc, char *argv[])
   if (getenv("POSY")) {
     win_posy = atoi(getenv("POSY"));
   }
-
-  #if defined(VK_X11)
-  if (!strcmp(wsi, "vk-x11")) {
-    vk_extension_name = VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
-  }
-  #endif
-  #if defined(VK_DIRECTFB)
-  if (!strcmp(wsi, "vk-directfb")) {
-    vk_extension_name = VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME;
-  }
-  #endif
-  #if defined(VK_FBDEV)
-  if (!strcmp(wsi, "vk-fbdev")) {
-    vk_extension_name = VK_EXT_FBDEV_SURFACE_EXTENSION_NAME;
-  }
-  #endif
-  #if defined(VK_WAYLAND)
-  if (!strcmp(wsi, "vk-wayland")) {
-    vk_extension_name = VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
-  }
-  #endif
-  #if defined(VK_XCB)
-  if (!strcmp(wsi, "vk-xcb")) {
-    vk_extension_name = VK_KHR_XCB_SURFACE_EXTENSION_NAME;
-  }
-  #endif
 
   /* create window associated to the display */
 
@@ -824,7 +973,7 @@ int main(int argc, char *argv[])
   if (!strcmp(wsi, "vk-fbdev")) {
     fb_win = calloc(1, sizeof(struct fb_window));
     if (!fb_win) {
-      printf("fb_window calloc failed: %s\n", strerror(errno));
+      printf("fb_window calloc failed: %m\n");
       goto out;
     }
 
@@ -836,14 +985,14 @@ int main(int argc, char *argv[])
     if (getenv("KEYBOARD")) {
       fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("KEYBOARD"));
         goto out;
       }
     }
     else {
       fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        printf("open /dev/input/event0 failed: %m\n");
         goto out;
       }
     }
@@ -898,37 +1047,32 @@ int main(int argc, char *argv[])
     xcb_flush(xcb_dpy);
   }
   #endif
+  #if defined(VK_D2D)
+  if (!strcmp(wsi, "vk-d2d")) {
+    d2d_win = d2d_mode_properties[0].parameters.visibleRegion;
 
-  /* create instance and set physical device */
+    if (getenv("KEYBOARD")) {
+      d2d_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+      if (d2d_keyboard == -1) {
+        printf("open %s failed: %m\n", getenv("KEYBOARD"));
+        goto out;
+      }
+    }
+    else {
+      d2d_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+      if (d2d_keyboard == -1) {
+        printf("open /dev/input/event0 failed: %m\n");
+        goto out;
+      }
+    }
 
-  memset(&vk_instance_create_info, 0, sizeof(VkInstanceCreateInfo));
-  vk_instance_create_info.enabledExtensionCount = 1;
-  vk_instance_create_info.ppEnabledExtensionNames = &vk_extension_name;
-  err = vkCreateInstance(&vk_instance_create_info, NULL, &vk_instance);
-  if (err) {
-    printf("vkCreateInstance failed: %d\n", err);
-    goto out;
+    err = libevdev_new_from_fd(d2d_keyboard, &d2d_evdev);
+    if (err < 0) {
+      printf("libevdev_new_from_fd failed: %m\n");
+      goto out;
+    }
   }
-
-  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, NULL);
-  if (err || !vk_physical_devices_count) {
-    printf("vkEnumeratePhysicalDevices failed: %d, %d\n", err, vk_physical_devices_count);
-    goto out;
-  }
-
-  vk_physical_devices = calloc(vk_physical_devices_count, sizeof(VkPhysicalDevice));
-  if (!vk_physical_devices) {
-    printf("calloc failed: %s\n", strerror(errno));
-    goto out;
-  }
-
-  err = vkEnumeratePhysicalDevices(vk_instance, &vk_physical_devices_count, vk_physical_devices);
-  if (err) {
-    printf("vkEnumeratePhysicalDevices failed: %d\n", err);
-    goto out;
-  }
-
-  vk_physical_device = vk_physical_devices[0];
+  #endif
 
   /* create surface */
 
@@ -992,6 +1136,18 @@ int main(int argc, char *argv[])
     }
   }
   #endif
+  #if defined(VK_D2D)
+  if (!strcmp(wsi, "vk-d2d")) {
+    memset(&d2d_surface_create_info, 0, sizeof(VkDisplaySurfaceCreateInfoKHR));
+    d2d_surface_create_info.displayMode = d2d_dpy;
+    d2d_surface_create_info.imageExtent = d2d_win;
+    err = vkCreateDisplayPlaneSurfaceKHR(vk_instance, &d2d_surface_create_info, NULL, &vk_surface);
+    if (err) {
+      printf("vkCreateXcbSurfaceKHR failed: %d\n", err);
+      goto out;
+    }
+  }
+  #endif
 
   /* create logical device */
 
@@ -1045,7 +1201,7 @@ int main(int argc, char *argv[])
     if (animate && redisplay) {
       err = gettimeofday(&tv, NULL);
       if (err == -1) {
-        printf("gettimeofday failed: %s\n", strerror(errno));
+        printf("gettimeofday failed: %m\n");
       }
 
       t = tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -1156,6 +1312,20 @@ int main(int argc, char *argv[])
         if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
           xcb_keyboard_handle_key(xcb_event);
           free(xcb_event);
+        }
+      }
+    }
+    #endif
+    #if defined(VK_D2D)
+    if (!strcmp(wsi, "vk-d2d")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
+      memset(&d2d_event, 0, sizeof(struct input_event));
+      if (!libevdev_next_event(d2d_evdev, LIBEVDEV_READ_FLAG_NORMAL, &d2d_event) && d2d_event.type == EV_KEY) {
+        if (d2d_event.value) {
+          d2d_keyboard_handle_key(&d2d_event);
         }
       }
     }
@@ -1309,6 +1479,33 @@ out:
 
     if (xcb_dpy) {
       xcb_disconnect(xcb_dpy);
+    }
+  }
+  #endif
+  #if defined(VK_D2D)
+  if (!strcmp(wsi, "vk-d2d")) {
+    if (d2d_evdev) {
+      libevdev_free(d2d_evdev);
+    }
+
+    if (d2d_keyboard != -1) {
+      close(d2d_keyboard);
+    }
+
+    if (!d2d_win.width || !d2d_win.height) {
+      memset(&d2d_win, 0, sizeof(VkExtent2D));
+    }
+
+    if (d2d_mode_properties) {
+      free(d2d_mode_properties);
+    }
+
+    if (d2d_properties) {
+      free(d2d_properties);
+    }
+
+    if (d2d_dpy) {
+      d2d_dpy = VK_NULL_HANDLE;
     }
   }
   #endif

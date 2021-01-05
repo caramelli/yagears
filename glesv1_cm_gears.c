@@ -34,69 +34,98 @@ extern struct list engine_list;
 
 /******************************************************************************/
 
-typedef GLfloat Vertex[8];
+#define GEAR0 0
+#define GEAR1 1
+#define GEAR2 2
+
+typedef float Vertex[8];
 
 typedef struct {
-  GLint begin;
-  GLsizei count;
+  int begin;
+  int count;
 } Strip;
 
 struct gear {
-  GLint nvertices;
+  int nvertices;
   Vertex *vertices;
-  GLint nstrips;
+  int nstrips;
   Strip *strips;
   GLuint vbo;
 };
 
 struct gears {
   void *lib_handle;
-  void (*glEnable)(GLenum);
-  void (*glDisable)(GLenum);
-  void (*glLightfv)(GLenum, GLenum, const GLfloat *);
-  void (*glTexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *);
-  void (*glTexParameteri)(GLenum, GLenum, GLint);
-  void (*glTexEnvi)(GLenum, GLenum, GLint);
-  void (*glClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
-  void (*glGenBuffers)(GLsizei, GLuint *);
-  void (*glBindBuffer)(GLenum, GLuint);
-  void (*glBufferData)(GLenum, GLsizeiptr, const GLvoid *, GLenum);
-  void (*glViewport)(GLint, GLint, GLsizei, GLsizei);
-  void (*glMatrixMode)(GLenum);
-  void (*glFrustumf)(GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat);
-  void (*glClear)(GLbitfield);
-  void (*glLoadIdentity)();
-  void (*glTranslatef)(GLfloat, GLfloat, GLfloat);
-  void (*glRotatef)(GLfloat, GLfloat, GLfloat, GLfloat);
-  void (*glPushMatrix)();
-  void (*glMaterialfv)(GLenum, GLenum, const GLfloat *);
-  void (*glVertexPointer)(GLint, GLenum, GLsizei, const GLvoid *);
-  void (*glNormalPointer)(GLenum, GLsizei, const GLvoid *);
-  void (*glTexCoordPointer)(GLint, GLenum, GLsizei, const GLvoid *);
-  void (*glEnableClientState)(GLenum);
-  void (*glDrawArrays)(GLenum, GLint, GLsizei);
-  void (*glDisableClientState)(GLenum);
-  void (*glPopMatrix)();
-  void (*glDeleteBuffers)(GLsizei, const GLuint *);
+  void           (*glBindBuffer)(GLenum, GLuint);
+  void           (*glBufferData)(GLenum, GLsizeiptr, const GLvoid *, GLenum);
+  void           (*glClear)(GLbitfield);
+  void           (*glClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
+  void           (*glDeleteBuffers)(GLsizei, const GLuint *);
+  void           (*glDisable)(GLenum);
+  void           (*glDisableClientState)(GLenum);
+  void           (*glDrawArrays)(GLenum, GLint, GLsizei);
+  void           (*glEnable)(GLenum);
+  void           (*glEnableClientState)(GLenum);
+  void           (*glFrustumf)(GLfloat, GLfloat, GLfloat, GLfloat, GLfloat, GLfloat);
+  void           (*glGenBuffers)(GLsizei, GLuint *);
+  GLenum         (*glGetError)();
   const GLubyte *(*glGetString)(GLenum);
-  struct gear *gear1;
-  struct gear *gear2;
-  struct gear *gear3;
+  void           (*glLightfv)(GLenum, GLenum, const GLfloat *);
+  void           (*glLoadIdentity)();
+  void           (*glMaterialfv)(GLenum, GLenum, const GLfloat *);
+  void           (*glMatrixMode)(GLenum);
+  void           (*glNormalPointer)(GLenum, GLsizei, const GLvoid *);
+  void           (*glPopMatrix)();
+  void           (*glPushMatrix)();
+  void           (*glRotatef)(GLfloat, GLfloat, GLfloat, GLfloat);
+  void           (*glTexCoordPointer)(GLint, GLenum, GLsizei, const GLvoid *);
+  void           (*glTexEnvi)(GLenum, GLenum, GLint);
+  void           (*glTexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *);
+  void           (*glTexParameteri)(GLenum, GLenum, GLint);
+  void           (*glTranslatef)(GLfloat, GLfloat, GLfloat);
+  void           (*glVertexPointer)(GLint, GLenum, GLsizei, const GLvoid *);
+  void           (*glViewport)(GLint, GLint, GLsizei, GLsizei);
+  struct gear *gear[3];
 };
 
-static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
+static void delete_gear(gears_t *gears, int id)
+{
+  struct gear *gear = gears->gear[id];
+
+  if (!gear) {
+    return;
+  }
+
+  if (gear->vbo) {
+    gears->glDeleteBuffers(1, &gear->vbo);
+  }
+  if (gear->strips) {
+    free(gear->strips);
+  }
+  if (gear->vertices) {
+    free(gear->vertices);
+  }
+
+  free(gear);
+
+  gears->gear[id] = NULL;
+}
+
+static int create_gear(gears_t *gears, int id, float inner, float outer, float width, int teeth, float tooth_depth)
 {
   struct gear *gear;
-  GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
-  GLint i, j;
-  GLfloat n[3], t[2];
-  GLint k = 0;
+  float r0, r1, r2, da, a1, ai, s[5], c[5];
+  int i, j;
+  float n[3], t[2];
+  int k = 0;
+  GLenum err = GL_NO_ERROR;
 
   gear = calloc(1, sizeof(struct gear));
   if (!gear) {
     printf("calloc gear failed\n");
-    return NULL;
+    return -1;
   }
+
+  gears->gear[id] = gear;
 
   gear->nvertices = 0;
   gear->vertices = calloc(34 * teeth, sizeof(Vertex));
@@ -259,27 +288,35 @@ static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GL
   }
 
   gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
+  err = gears->glGetError();
+  if (err) {
+    printf("glBindBuffer failed: 0x%x\n", err);
+    goto out;
+  }
 
   gears->glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
+  err = gears->glGetError();
+  if (err) {
+    printf("glBufferData failed: 0x%x\n", err);
+    goto out;
+  }
 
-  return gear;
+  return 0;
 
 out:
-  if (gear->strips) {
-    free(gear->strips);
-  }
-  if (gear->vertices) {
-    free(gear->vertices);
-  }
-  free(gear);
-  return NULL;
+  delete_gear(gears, id);
+  return -1;
 }
 
 static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
-  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
-  GLint k;
-  struct gear *gear = NULL;
+  struct gear *gear = gears->gear[id];
+  const float pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+  int k;
+
+  if (!gear) {
+    return;
+  }
 
   gears->glPushMatrix();
   gears->glLoadIdentity();
@@ -298,13 +335,11 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   else
     gears->glEnable(GL_TEXTURE_2D);
 
-  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
   gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
   gears->glVertexPointer(3, GL_FLOAT, sizeof(Vertex), NULL);
-  gears->glNormalPointer(GL_FLOAT, sizeof(Vertex), (const GLfloat *)NULL + 3);
-  gears->glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (const GLfloat *)NULL + 6);
+  gears->glNormalPointer(GL_FLOAT, sizeof(Vertex), (const float *)NULL + 3);
+  gears->glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (const float *)NULL + 6);
 
   gears->glEnableClientState(GL_VERTEX_ARRAY);
   gears->glEnableClientState(GL_NORMAL_ARRAY);
@@ -321,25 +356,39 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   gears->glPopMatrix();
 }
 
-static void delete_gear(gears_t *gears, int id)
-{
-  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
-  gears->glDeleteBuffers(1, &gear->vbo);
-  free(gear->strips);
-  free(gear->vertices);
-
-  free(gear);
-}
-
 /******************************************************************************/
+
+static void glesv1_cm_gears_term(gears_t *gears)
+{
+  if (!gears) {
+    return;
+  }
+
+  if (gears->gear[GEAR2]) {
+    delete_gear(gears, GEAR2);
+  }
+  if (gears->gear[GEAR1]) {
+    delete_gear(gears, GEAR1);
+  }
+  if (gears->gear[GEAR0]) {
+    delete_gear(gears, GEAR0);
+  }
+
+  printf("%s\n", gears->glGetString(GL_VERSION));
+
+  if (gears->lib_handle) {
+    dlclose(gears->lib_handle);
+  }
+
+  free(gears);
+}
 
 static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
 {
   gears_t *gears = NULL;
   int texture_width, texture_height;
   void *texture_data = NULL;
-  const GLfloat zNear = 5, zFar = 60;
+  const float zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
@@ -359,34 +408,35 @@ static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
     goto out; \
   }
 
-  DLSYM(glEnable);
-  DLSYM(glDisable);
-  DLSYM(glLightfv);
-  DLSYM(glTexImage2D);
-  DLSYM(glTexParameteri);
-  DLSYM(glTexEnvi);
-  DLSYM(glClearColor);
-  DLSYM(glGenBuffers);
   DLSYM(glBindBuffer);
   DLSYM(glBufferData);
-  DLSYM(glViewport);
-  DLSYM(glMatrixMode);
-  DLSYM(glFrustumf);
   DLSYM(glClear);
-  DLSYM(glLoadIdentity);
-  DLSYM(glTranslatef);
-  DLSYM(glRotatef);
-  DLSYM(glPushMatrix);
-  DLSYM(glMaterialfv);
-  DLSYM(glVertexPointer);
-  DLSYM(glNormalPointer);
-  DLSYM(glTexCoordPointer);
-  DLSYM(glEnableClientState);
-  DLSYM(glDrawArrays);
+  DLSYM(glClearColor);
+  DLSYM(glDisable);
   DLSYM(glDisableClientState);
-  DLSYM(glPopMatrix);
   DLSYM(glDeleteBuffers);
+  DLSYM(glDrawArrays);
+  DLSYM(glEnable);
+  DLSYM(glEnableClientState);
+  DLSYM(glFrustumf);
+  DLSYM(glGenBuffers);
+  DLSYM(glGetError);
   DLSYM(glGetString);
+  DLSYM(glLightfv);
+  DLSYM(glLoadIdentity);
+  DLSYM(glMaterialfv);
+  DLSYM(glMatrixMode);
+  DLSYM(glNormalPointer);
+  DLSYM(glPopMatrix);
+  DLSYM(glPushMatrix);
+  DLSYM(glRotatef);
+  DLSYM(glTexCoordPointer);
+  DLSYM(glTexEnvi);
+  DLSYM(glTexImage2D);
+  DLSYM(glTexParameteri);
+  DLSYM(glTranslatef);
+  DLSYM(glVertexPointer);
+  DLSYM(glViewport);
 
   gears->glEnable(GL_DEPTH_TEST);
   gears->glEnable(GL_NORMALIZE);
@@ -417,47 +467,32 @@ static gears_t *glesv1_cm_gears_init(int win_width, int win_height)
 
   gears->glClearColor(0, 0, 0, 1);
 
-  gears->glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+  gears->glViewport(0, 0, win_width, win_height);
 
   /* create gears */
 
-  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7);
-  if (!gears->gear1) {
+  if (create_gear(gears, GEAR0, 1.0, 4.0, 1.0, 20, 0.7)) {
     goto out;
   }
 
-  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7);
-  if (!gears->gear2) {
+  if (create_gear(gears, GEAR1, 0.5, 2.0, 2.0, 10, 0.7)) {
     goto out;
   }
 
-  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7);
-  if (!gears->gear3) {
+  if (create_gear(gears, GEAR2, 1.3, 2.0, 0.5, 10, 0.7)) {
     goto out;
   }
 
   gears->glMatrixMode(GL_PROJECTION);
 
-  gears->glFrustumf(-1, 1, -(GLfloat)win_height/win_width, (GLfloat)win_height/win_width, zNear, zFar);
+  gears->glFrustumf(-1, 1, -(float)win_height/win_width, (float)win_height/win_width, zNear, zFar);
 
   gears->glMatrixMode(GL_MODELVIEW);
 
   return gears;
 
 out:
-  if (gears->gear3) {
-    delete_gear(gears, 3);
-  }
-  if (gears->gear2) {
-    delete_gear(gears, 2);
-  }
-  if (gears->gear1) {
-    delete_gear(gears, 1);
-  }
-  if (gears->lib_handle) {
-    dlclose(gears->lib_handle);
-  }
-  free(gears);
+  glesv1_cm_gears_term(gears);
   return NULL;
 }
 
@@ -474,30 +509,13 @@ static void glesv1_cm_gears_draw(gears_t *gears, float view_tz, float view_rx, f
   gears->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   gears->glLoadIdentity();
-  gears->glTranslatef(0, 0, (GLfloat)view_tz);
-  gears->glRotatef((GLfloat)view_rx, 1, 0, 0);
-  gears->glRotatef((GLfloat)view_ry, 0, 1, 0);
+  gears->glTranslatef(0, 0, view_tz);
+  gears->glRotatef(view_rx, 1, 0, 0);
+  gears->glRotatef(view_ry, 0, 1, 0);
 
-  draw_gear(gears, 1, -3.0, -2.0,      model_rz     , red);
-  draw_gear(gears, 2,  3.1, -2.0, -2 * model_rz - 9 , green);
-  draw_gear(gears, 3, -3.1,  4.2, -2 * model_rz - 25, blue);
-}
-
-static void glesv1_cm_gears_term(gears_t *gears)
-{
-  if (!gears) {
-    return;
-  }
-
-  delete_gear(gears, 1);
-  delete_gear(gears, 2);
-  delete_gear(gears, 3);
-
-  printf("%s\n", gears->glGetString(GL_VERSION));
-
-  dlclose(gears->lib_handle);
-
-  free(gears);
+  draw_gear(gears, GEAR0, -3.0, -2.0,      model_rz     , red);
+  draw_gear(gears, GEAR1,  3.1, -2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, GEAR2, -3.1,  4.2, -2 * model_rz - 25, blue);
 }
 
 /******************************************************************************/

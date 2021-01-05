@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.4')
+project('yagears', 'c', 'cpp', version: '2.5')
 
 config_h = configuration_data()
 
@@ -29,6 +29,7 @@ enable_vk_directfb = get_option('vk-directfb')
 enable_vk_fbdev = get_option('vk-fbdev')
 enable_vk_wayland = get_option('vk-wayland')
 enable_vk_xcb = get_option('vk-xcb')
+enable_vk_d2d = get_option('vk-d2d')
 
 enable_efl = get_option('efl')
 enable_fltk = get_option('fltk')
@@ -260,7 +261,8 @@ endif
 # Vulkan WSIs
 
 vulkan_dep = []
-if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb
+d2d_dep = []
+if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d
   vulkan_dep = dependency('vulkan', required: false)
   glslang_validator = find_program('glslangValidator', required: false)
   if vulkan_dep.found() and glslang_validator.found()
@@ -343,12 +345,24 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
         enable_vk_xcb = false
       endif
     endif
+
+    if enable_vk_d2d
+      if cc.has_function('vkCreateDisplayPlaneSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir))
+        d2d_dep = dependency('libevdev', required: false)
+        if not d2d_dep.found()
+          enable_vk_d2d = false
+        endif
+      else
+        enable_vk_d2d = false
+      endif
+    endif
   else
     enable_vk_x11 = false
     enable_vk_directfb = false
     enable_vk_fbdev = false
     enable_vk_wayland = false
     enable_vk_xcb = false
+    enable_vk_d2d = false
   endif
 endif
 config_h.set('VK_X11', enable_vk_x11, description: 'Support for Xlib WSI')
@@ -356,8 +370,9 @@ config_h.set('VK_DIRECTFB', enable_vk_directfb , description: 'Support for Direc
 config_h.set('VK_FBDEV', enable_vk_fbdev, description: 'Support for FBDev WSI')
 config_h.set('VK_WAYLAND', enable_vk_wayland, description: 'Support for Wayland WSI')
 config_h.set('VK_XCB', enable_vk_xcb, description: 'Support for XCB WSI')
+config_h.set('VK_D2D', enable_vk_d2d, description: 'Support for D2D WSI')
 
-if not enable_vk_x11 and not enable_vk_directfb and not enable_vk_fbdev and not enable_vk_wayland and not enable_vk_xcb
+if not enable_vk_x11 and not enable_vk_directfb and not enable_vk_fbdev and not enable_vk_wayland and not enable_vk_xcb and not enable_vk_d2d
   warning('No Vulkan WSIs found')
 endif
 
@@ -557,6 +572,7 @@ message('  Vulkan extension for DirectFB     @0@'.format(enable_vk_directfb))
 message('  Vulkan extension for Linux FBDev  @0@'.format(enable_vk_fbdev))
 message('  Vulkan extension for Wayland      @0@'.format(enable_vk_wayland))
 message('  Vulkan extension for XCB          @0@'.format(enable_vk_xcb))
+message('  Vulkan extension for D2D          @0@'.format(enable_vk_d2d))
 message('')
 
 message('')
@@ -579,7 +595,7 @@ GL = enable_gl
 GLESV1_CM = enable_glesv1_cm
 GLESV2 = enable_glesv2
 
-if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb
+if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d
   VK = true
 else
   VK = false
@@ -593,7 +609,7 @@ else
   GUI = false
 endif
 
-if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb) and (enable_glfw or enable_sdl)
+if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d) and (enable_glfw or enable_sdl)
   VK_GUI = true
 else
   VK_GUI = false
@@ -648,7 +664,7 @@ frag_spv_file = custom_target('frag_spv', command: [glslang_validator, '@INPUT@'
 
 executable('yagears2-vk',
            'vk.c', 'vulkan_gears.c', vert_spv_file, frag_spv_file, 'image_loader.c', png_source, tiff_source,
-           dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep],
+           dependencies: [vulkan_dep, png_dep, tiff_dep, x11_dep, directfb_dep, wayland_dep, xcb_dep, d2d_dep],
            install: true)
 endif
 

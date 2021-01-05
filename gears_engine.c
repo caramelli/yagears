@@ -124,6 +124,7 @@ void gears_engine_term(gears_engine_t *gears_engine)
   }
 
   gears_engine->engine->term(gears_engine->gears);
+  gears_engine->gears = NULL;
 }
 
 void gears_engine_free(gears_engine_t *gears_engine)

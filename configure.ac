@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.4)
+AC_INIT(yagears, 2.5)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -15,44 +15,44 @@ LIBS="$LIBS -lm"
 # Configuration options
 
 AC_ARG_ENABLE(gl,
-              AS_HELP_STRING(--disable-gl, disable OpenGL 1.0 engine),
+              AS_HELP_STRING(--disable-gl, disable OpenGL 1.0 Engine),
               enable_gl=no, enable_gl=yes)
 AC_ARG_ENABLE(glesv1_cm,
-              AS_HELP_STRING(--disable-glesv1_cm, disable OpenGL ES 1.1 CM engine),
+              AS_HELP_STRING(--disable-glesv1_cm, disable OpenGL ES 1.1 CM Engine),
               enable_glesv1_cm=no, enable_glesv1_cm=yes)
 AC_ARG_ENABLE(glesv2,
-              AS_HELP_STRING(--disable-glesv2, disable OpenGL ES 2.0 engine),
+              AS_HELP_STRING(--disable-glesv2, disable OpenGL ES 2.0 Engine),
               enable_glesv2=no, enable_glesv2=yes)
 
 AC_ARG_ENABLE(gl-x11,
-              AS_HELP_STRING(--disable-gl-x11, disable OpenGL extension for Xlib backend),
+              AS_HELP_STRING(--disable-gl-x11, disable OpenGL extension for Xlib Backend),
               enable_gl_x11=no, enable_gl_x11=yes)
 AC_ARG_ENABLE(gl-directfb,
-              AS_HELP_STRING(--disable-gl-directfb, disable OpenGL extension for DirectFB backend),
+              AS_HELP_STRING(--disable-gl-directfb, disable OpenGL extension for DirectFB Backend),
               enable_gl_directfb=no, enable_gl_directfb=yes)
 AC_ARG_ENABLE(gl-fbdev,
-              AS_HELP_STRING(--disable-gl-fbdev, disable OpenGL extension for Linux Framebuffer backend),
+              AS_HELP_STRING(--disable-gl-fbdev, disable OpenGL extension for Linux Framebuffer Backend),
               enable_gl_fbdev=no, enable_gl_fbdev=yes)
 AC_ARG_ENABLE(egl-x11,
-              AS_HELP_STRING(--disable-egl-x11, disable EGL interface for Xlib backend),
+              AS_HELP_STRING(--disable-egl-x11, disable EGL interface for Xlib Backend),
               enable_egl_x11=no, enable_egl_x11=yes)
 AC_ARG_ENABLE(egl-directfb,
-              AS_HELP_STRING(--disable-egl-directfb, disable EGL interface for DirectFB backend),
+              AS_HELP_STRING(--disable-egl-directfb, disable EGL interface for DirectFB Backend),
               enable_egl_directfb=no, enable_egl_directfb=yes)
 AC_ARG_ENABLE(egl-fbdev,
-              AS_HELP_STRING(--disable-egl-fbdev, disable EGL interface for Linux Framebuffer backend),
+              AS_HELP_STRING(--disable-egl-fbdev, disable EGL interface for Linux Framebuffer Backend),
               enable_egl_fbdev=no, enable_egl_fbdev=yes)
 AC_ARG_ENABLE(egl-wayland,
-              AS_HELP_STRING(--disable-egl-wayland, disable EGL interface for Wayland backend),
+              AS_HELP_STRING(--disable-egl-wayland, disable EGL interface for Wayland Backend),
               enable_egl_wayland=no, enable_egl_wayland=yes)
 AC_ARG_ENABLE(egl-xcb,
-              AS_HELP_STRING(--disable-egl-xcb, disable EGL interface for XCB backend),
+              AS_HELP_STRING(--disable-egl-xcb, disable EGL interface for XCB Backend),
               enable_egl_xcb=no, enable_egl_xcb=yes)
 AC_ARG_ENABLE(egl-drm,
-              AS_HELP_STRING(--disable-egl-drm, disable EGL interface for DRM backend),
+              AS_HELP_STRING(--disable-egl-drm, disable EGL interface for DRM Backend),
               enable_egl_drm=no, enable_egl_drm=yes)
 AC_ARG_ENABLE(egl-rpi,
-              AS_HELP_STRING(--disable-egl-rpi, disable EGL interface for Raspberry Pi Dispmanx backend),
+              AS_HELP_STRING(--disable-egl-rpi, disable EGL interface for Raspberry Pi Dispmanx Backend),
               enable_egl_rpi=no, enable_egl_rpi=yes)
 
 AC_ARG_ENABLE(vk-x11,
@@ -70,46 +70,49 @@ AC_ARG_ENABLE(vk-wayland,
 AC_ARG_ENABLE(vk-xcb,
               AS_HELP_STRING(--disable-vk-xcb, disable Vulkan extension for XCB WSI),
               enable_vk_xcb=no, enable_vk_xcb=yes)
+AC_ARG_ENABLE(vk-d2d,
+              AS_HELP_STRING(--disable-vk-d2d, disable Vulkan extension for Direct-to-Display WSI),
+              enable_vk_d2d=no, enable_vk_d2d=yes)
 
 AC_ARG_ENABLE(efl,
-              AS_HELP_STRING(--disable-efl, disable EFL GUI toolkit),
+              AS_HELP_STRING(--disable-efl, disable EFL GUI Toolkit),
               enable_efl=no, enable_efl=yes)
 AC_ARG_ENABLE(fltk,
-              AS_HELP_STRING(--disable-fltk, disable FLTK GUI toolkit),
+              AS_HELP_STRING(--disable-fltk, disable FLTK GUI Toolkit),
               enable_fltk=no, enable_fltk=yes)
 AC_ARG_ENABLE(glfw,
-              AS_HELP_STRING(--disable-glfw, disable GLFW GUI toolkit),
+              AS_HELP_STRING(--disable-glfw, disable GLFW GUI Toolkit),
               enable_glfw=no, enable_glfw=yes)
 AC_ARG_ENABLE(glut,
-              AS_HELP_STRING(--disable-glut, disable GLUT GUI toolkit),
+              AS_HELP_STRING(--disable-glut, disable GLUT GUI Toolkit),
               enable_glut=no, enable_glut=yes)
 AC_ARG_ENABLE(gtk,
-              AS_HELP_STRING(--disable-gtk, disable GTK+ GUI toolkit),
+              AS_HELP_STRING(--disable-gtk, disable GTK+ GUI Toolkit),
               enable_gtk=no, enable_gtk=yes)
 AC_ARG_ENABLE(qt,
-              AS_HELP_STRING(--disable-qt, disable Qt GUI toolkit),
+              AS_HELP_STRING(--disable-qt, disable Qt GUI Toolkit),
               enable_qt=no, enable_qt=yes)
 AC_ARG_ENABLE(sdl,
-              AS_HELP_STRING(--disable-sdl, disable SDL GUI toolkit),
+              AS_HELP_STRING(--disable-sdl, disable SDL GUI Toolkit),
               enable_sdl=no, enable_sdl=yes)
 AC_ARG_ENABLE(sfml,
-              AS_HELP_STRING(--disable-sfml, disable SFML GUI toolkit),
+              AS_HELP_STRING(--disable-sfml, disable SFML GUI Toolkit),
               enable_sfml=no, enable_sfml=yes)
 AC_ARG_ENABLE(wx,
-              AS_HELP_STRING(--disable-wx, disable wxWidgets GUI toolkit),
+              AS_HELP_STRING(--disable-wx, disable wxWidgets GUI Toolkit),
               enable_wx=no, enable_wx=yes)
 
 AC_ARG_WITH(gtk,
-            AS_HELP_STRING(--with-gtk=2|3, GTK+ GUI toolkit version (default: 3)),
-            [case "$with_gtk" in 2|3) ;; *) AC_MSG_ERROR(Invalid GTK+ GUI toolkit version) ;; esac],
+            AS_HELP_STRING(--with-gtk=2|3, GTK+ GUI Toolkit version (default: 3)),
+            [case "$with_gtk" in 2|3) ;; *) AC_MSG_ERROR(Invalid GTK+ GUI Toolkit version) ;; esac],
             with_gtk=3)
 AC_ARG_WITH(qt,
-            AS_HELP_STRING(--with-qt=4|5, Qt GUI toolkit version (default: 5)),
-            [case "$with_qt" in 4|5) ;; *) AC_MSG_ERROR(Invalid Qt GUI toolkit version) ;; esac],
+            AS_HELP_STRING(--with-qt=4|5, Qt GUI Toolkit version (default: 5)),
+            [case "$with_qt" in 4|5) ;; *) AC_MSG_ERROR(Invalid Qt GUI Toolkit version) ;; esac],
             with_qt=5)
 AC_ARG_WITH(sdl,
-            AS_HELP_STRING(--with-sdl=1|2, SDL GUI toolkit version (default: 2)),
-            [case "$with_sdl" in 1|2) ;; *) AC_MSG_ERROR(Invalid SDL GUI toolkit version) ;; esac],
+            AS_HELP_STRING(--with-sdl=1|2, SDL GUI Toolkit version (default: 2)),
+            [case "$with_sdl" in 1|2) ;; *) AC_MSG_ERROR(Invalid SDL GUI Toolkit version) ;; esac],
             with_sdl=2)
 
 AC_ARG_ENABLE(png,
@@ -307,7 +310,7 @@ fi
 
 # Vulkan WSIs
 
-if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes; then
+if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes; then
   PKG_CHECK_MODULES(VULKAN, vulkan, enable_vulkan=yes, enable_vulkan=no)
   AC_PATH_TOOL(GLSLANG_VALIDATOR, glslangValidator)
   if test x$enable_vulkan = xyes -a -n "$GLSLANG_VALIDATOR"; then
@@ -362,6 +365,13 @@ if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbd
       fi
     fi
 
+    if test x$enable_vk_d2d = xyes; then
+      AC_CHECK_LIB(vulkan, vkCreateDisplayPlaneSurfaceKHR, , enable_vk_d2d=no)
+      if test x$enable_vk_d2d = xyes; then
+        PKG_CHECK_MODULES(D2D, libevdev, , enable_vk_d2d=no)
+      fi
+    fi
+
     LIBS=$save_LIBS
   else
     enable_vk_x11=no
@@ -369,6 +379,7 @@ if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbd
     enable_vk_fbdev=no
     enable_vk_wayland=no
     enable_vk_xcb=no
+    enable_vk_d2d=no
   fi
 fi
 if test x$enable_vk_x11 = xyes; then
@@ -386,8 +397,11 @@ fi
 if test x$enable_vk_xcb = xyes; then
   AC_DEFINE(VK_XCB, , Support for XCB WSI)
 fi
+if test x$enable_vk_d2d = xyes; then
+  AC_DEFINE(VK_D2D, , Support for D2D WSI)
+fi
 
-if test x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev = xno -a x$enable_vk_wayland = xno -a x$enable_vk_xcb = xno; then
+if test x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev = xno -a x$enable_vk_wayland = xno -a x$enable_vk_xcb = xno -a x$enable_vk_d2d = xno; then
   AC_MSG_WARN(No Vulkan WSIs found)
 fi
 
@@ -557,6 +571,7 @@ echo "  Vulkan extension for DirectFB     $enable_vk_directfb"
 echo "  Vulkan extension for Linux FBDev  $enable_vk_fbdev"
 echo "  Vulkan extension for Wayland      $enable_vk_wayland"
 echo "  Vulkan extension for XCB          $enable_vk_xcb"
+echo "  Vulkan extension for D2D          $enable_vk_d2d"
 echo
 
 echo
@@ -579,13 +594,13 @@ AM_CONDITIONAL(GL, test x$enable_gl = xyes)
 AM_CONDITIONAL(GLESV1_CM, test x$enable_glesv1_cm = xyes)
 AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
 
-AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes)
+AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes)
 
 AM_CONDITIONAL(MOSAIC, test x$enable_glut = xyes)
 
 AM_CONDITIONAL(GUI, test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable_glfw = xyes -o x$enable_glut = xyes -o x$enable_gtk = xyes -o x$enable_qt = xyes -o x$enable_sdl = xyes -o x$enable_sfml = xyes -o x$enable_wx = xyes)
 
-AM_CONDITIONAL(VK_GUI, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes && test x$enable_glfw = xyes -o x$enable_sdl = xyes)
+AM_CONDITIONAL(VK_GUI, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes && test x$enable_glfw = xyes -o x$enable_sdl = xyes)
 
 AM_CONDITIONAL(PNG, test x$enable_png = xyes)
 AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)

@@ -23,7 +23,6 @@
 
 #include "config.h"
 
-#include <errno.h>
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -874,7 +873,7 @@ int main(int argc, char *argv[])
   int rpi_fdflags = -1;
   char rpi_event[5];
   #endif
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM)
   #ifdef EGL_EXT_platform_base
   const char *egl_extension_name = NULL, *egl_extensions = NULL;
   PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT = NULL;
@@ -1031,14 +1030,14 @@ int main(int argc, char *argv[])
     if (getenv("FRAMEBUFFER")) {
       fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
       if (fb_dpy == -1) {
-        printf("open %s failed: %s\n", getenv("FRAMEBUFFER"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("FRAMEBUFFER"));
         goto out;
       }
     }
     else {
       fb_dpy = open("/dev/fb0", O_RDWR);
       if (fb_dpy == -1) {
-        printf("open /dev/fb0 failed: %s\n", strerror(errno));
+        printf("open /dev/fb0 failed: %m\n");
         goto out;
       }
     }
@@ -1046,14 +1045,14 @@ int main(int argc, char *argv[])
     memset(&fb_finfo, 0, sizeof(struct fb_fix_screeninfo));
     err = ioctl(fb_dpy, FBIOGET_FSCREENINFO, &fb_finfo);
     if (err == -1) {
-      printf("ioctl FBIOGET_FSCREENINFO failed: %s\n", strerror(errno));
+      printf("ioctl FBIOGET_FSCREENINFO failed: %m\n");
       goto out;
     }
 
     memset(&fb_vinfo, 0, sizeof(struct fb_var_screeninfo));
     err = ioctl(fb_dpy, FBIOGET_VSCREENINFO, &fb_vinfo);
     if (err == -1) {
-      printf("ioctl FBIOGET_VSCREENINFO failed: %s\n", strerror(errno));
+      printf("ioctl FBIOGET_VSCREENINFO failed: %m\n");
       goto out;
     }
 
@@ -1116,14 +1115,14 @@ int main(int argc, char *argv[])
     if (getenv("DRICARD")) {
       drm_fd = open(getenv("DRICARD"), O_RDWR);
       if (drm_fd == -1) {
-        printf("open %s failed: %s\n", getenv("DRICARD"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("DRICARD"));
         goto out;
       }
     }
     else {
       drm_fd = open("/dev/dri/card0", O_RDWR);
       if (drm_fd == -1) {
-        printf("open /dev/dri/card0 failed: %s\n", strerror(errno));
+        printf("open /dev/dri/card0 failed: %m\n");
         goto out;
       }
     }
@@ -1131,7 +1130,7 @@ int main(int argc, char *argv[])
     if (getenv("NO_GBM")) {
       drm_dpy = calloc(1, sizeof(struct drm_display));
       if (!drm_dpy) {
-        printf("drm_display calloc failed: %s\n", strerror(errno));
+        printf("drm_display calloc failed: %m\n");
         goto out;
       }
 
@@ -1185,31 +1184,25 @@ int main(int argc, char *argv[])
 
     drm_resources = drmModeGetResources(drm_fd);
     if (!drm_resources) {
-      printf("drmModeGetResources failed\n");
+      printf("drmModeGetResources failed: %m\n");
       goto out;
     }
 
     drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[0]);
     if (!drm_connector) {
-      printf("drmModeGetConnector failed\n");
+      printf("drmModeGetConnector failed: %m\n");
       goto out;
     }
 
-    for (opt = 0; opt < drm_resources->count_encoders; opt++) {
-      drm_encoder = drmModeGetEncoder(drm_fd, drm_resources->encoders[opt]);
-      if (!drm_encoder) {
-        printf("drmModeGetEncoder failed\n");
-        goto out;
-      }
-      else if (drm_encoder->encoder_id == drm_connector->encoder_id) {
-        break;
-      }
-      drmModeFreeEncoder(drm_encoder);
+    drm_encoder = drmModeGetEncoder(drm_fd, drm_connector->encoder_id);
+    if (!drm_encoder) {
+      printf("drmModeGetEncoder failed: %m\n");
+      goto out;
     }
 
     drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
     if (!drm_crtc) {
-      printf("drmModeGetCrtc failed\n");
+      printf("drmModeGetCrtc failed: %m\n");
       goto out;
     }
 
@@ -1255,7 +1248,7 @@ int main(int argc, char *argv[])
     win_posy = atoi(getenv("POSY"));
   }
 
-  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB)
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM)
   #ifdef EGL_EXT_platform_base
   #if defined(EGL_X11)
   if (!strcmp(backend, "egl-x11")) {
@@ -1280,6 +1273,11 @@ int main(int argc, char *argv[])
   #if defined(EGL_XCB)
   if (!strcmp(backend, "egl-xcb")) {
     egl_extension_name = "EGL_EXT_platform_xcb";
+  }
+  #endif
+  #if defined(EGL_DRM)
+  if (!strcmp(backend, "egl-drm")) {
+    egl_extension_name = "EGL_KHR_platform_gbm";
   }
   #endif
 
@@ -1363,8 +1361,16 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    setenv("EGL_PLATFORM", "drm", 1);
-    egl_dpy = eglGetDisplay((EGLNativeDisplayType)drm_dpy);
+    #if defined(EGL_EXT_platform_base) && defined(EGL_PLATFORM_GBM_KHR)
+    if (eglGetPlatformDisplayEXT) {
+      egl_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_GBM_KHR, drm_dpy, NULL);
+    }
+    else
+    #endif
+    {
+      setenv("EGL_PLATFORM", "drm", 1);
+      egl_dpy = eglGetDisplay((EGLNativeDisplayType)drm_dpy);
+    }
   }
   #endif
   #if defined(EGL_RPI)
@@ -1416,7 +1422,7 @@ int main(int argc, char *argv[])
 
     fb_addr = mmap(NULL, fb_finfo.smem_len, PROT_WRITE, MAP_SHARED, fb_dpy, 0);
     if (fb_addr == MAP_FAILED) {
-      printf("mmap failed: %s\n", strerror(errno));
+      printf("mmap failed: %m\n");
       goto out;
     }
 
@@ -1464,7 +1470,7 @@ int main(int argc, char *argv[])
 
     egl_configs = calloc(egl_configs_count, sizeof(EGLConfig));
     if (!egl_configs) {
-      printf("calloc failed: %s\n", strerror(errno));
+      printf("calloc failed: %m\n");
       goto out;
     }
 
@@ -1547,7 +1553,7 @@ int main(int argc, char *argv[])
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
     fb_win = calloc(1, sizeof(struct fb_window));
     if (!fb_win) {
-      printf("fb_window calloc failed: %s\n", strerror(errno));
+      printf("fb_window calloc failed: %m\n");
       goto out;
     }
 
@@ -1559,14 +1565,14 @@ int main(int argc, char *argv[])
     if (getenv("KEYBOARD")) {
       fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("KEYBOARD"));
         goto out;
       }
     }
     else {
       fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
       if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        printf("open /dev/input/event0 failed: %m\n");
         goto out;
       }
     }
@@ -1595,7 +1601,7 @@ int main(int argc, char *argv[])
     if (getenv("NO_WL_EGL_WINDOW")) {
       wl_win = calloc(1, sizeof(struct wl_window));
       if (!wl_win) {
-        printf("wl_window calloc failed: %s\n", strerror(errno));
+        printf("wl_window calloc failed: %m\n");
         goto out;
       }
 
@@ -1645,16 +1651,16 @@ int main(int argc, char *argv[])
     if (getenv("NO_GBM")) {
       drm_win = calloc(1, sizeof(struct drm_surface));
       if (!drm_win) {
-        printf("drm_surface calloc failed: %s\n", strerror(errno));
+        printf("drm_surface calloc failed: %m\n");
         goto out;
       }
 
       drm_win->display = drm_dpy;
-      drm_win->width = win_width;
-      drm_win->height = win_height;
+      drm_win->width = drm_connector->modes[0].hdisplay;
+      drm_win->height = drm_connector->modes[0].vdisplay;
     }
     else {
-      drm_win = gbm_surface_create(drm_dpy, win_width, win_height, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+      drm_win = gbm_surface_create(drm_dpy, drm_connector->modes[0].hdisplay, drm_connector->modes[0].vdisplay, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
       if (!drm_win) {
         printf("gbm_surface_create failed\n");
         goto out;
@@ -1664,21 +1670,21 @@ int main(int argc, char *argv[])
     if (getenv("KEYBOARD")) {
       drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
       if (drm_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
+        printf("open %s failed: %m\n", getenv("KEYBOARD"));
         goto out;
       }
     }
     else {
       drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
       if (drm_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+        printf("open /dev/input/event0 failed: %m\n");
         goto out;
       }
     }
 
     err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
     if (err < 0) {
-      printf("libevdev_new_from_fd failed: %s\n", strerror(-err));
+      printf("libevdev_new_from_fd failed: %m\n");
       goto out;
     }
   }
@@ -1715,7 +1721,7 @@ int main(int argc, char *argv[])
 
     rpi_win = calloc(1, sizeof(EGL_DISPMANX_WINDOW_T));
     if (!rpi_win) {
-      printf("EGL_DISPMANX_WINDOW_T calloc failed: %s\n", strerror(errno));
+      printf("EGL_DISPMANX_WINDOW_T calloc failed: %m\n");
       goto out;
     }
 
@@ -1725,13 +1731,13 @@ int main(int argc, char *argv[])
 
     rpi_termios = calloc(1, sizeof(struct termios));
     if (!rpi_termios) {
-      printf("rpi_termios calloc failed: %s\n", strerror(errno));
+      printf("rpi_termios calloc failed: %m\n");
       goto out;
     }
 
     err = tcgetattr(STDIN_FILENO, rpi_termios);
     if (err == -1) {
-      printf("tcgetattr failed: %s\n", strerror(errno));
+      printf("tcgetattr failed: %m\n");
       goto out;
     }
 
@@ -1740,19 +1746,19 @@ int main(int argc, char *argv[])
 
     err = tcsetattr(STDIN_FILENO, TCSANOW, &rpi_termios_new);
     if (err == -1) {
-      printf("tcsetattr failed: %s\n", strerror(errno));
+      printf("tcsetattr failed: %m\n");
       goto out;
     }
 
     rpi_fdflags = fcntl(STDIN_FILENO, F_GETFL);
     if (rpi_fdflags == -1) {
-      printf("fcntl F_GETFL failed: %s\n", strerror(errno));
+      printf("fcntl F_GETFL failed: %m\n");
       goto out;
     }
 
     err = fcntl(STDIN_FILENO, F_SETFL, rpi_fdflags | O_NONBLOCK);
     if (err == -1) {
-      printf("fcntl F_SETFL failed: %s\n", strerror(errno));
+      printf("fcntl F_SETFL failed: %m\n");
       goto out;
     }
   }
@@ -1826,6 +1832,15 @@ int main(int argc, char *argv[])
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
     egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
+    #if defined(EGL_EXT_platform_base) && defined(EGL_PLATFORM_GBM_KHR)
+    if (eglCreatePlatformWindowSurfaceEXT) {
+      egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, drm_win, NULL);
+    }
+    else
+    #endif
+    {
+      egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
+    }
   }
   #endif
   #if defined(EGL_RPI)
@@ -1933,7 +1948,7 @@ int main(int argc, char *argv[])
     if (animate && redisplay) {
       err = gettimeofday(&tv, NULL);
       if (err == -1) {
-        printf("gettimeofday failed: %s\n", strerror(errno));
+        printf("gettimeofday failed: %m\n");
       }
 
       t = tv.tv_sec * 1000 + tv.tv_usec / 1000;
@@ -2080,7 +2095,7 @@ int main(int argc, char *argv[])
         if (drm_bo) {
           drm_fb_id = getenv("NO_GBM") ? (uintptr_t)drm_bo->user_data : (uintptr_t)gbm_bo_get_user_data(drm_bo);
           if(!drm_fb_id) {
-            drmModeAddFB(drm_fd, win_width, win_height, 24, 32, getenv("NO_GBM") ? drm_bo->stride : gbm_bo_get_stride(drm_bo), getenv("NO_GBM") ? drm_bo->handle : gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
+            drmModeAddFB(drm_fd, getenv("NO_GBM") ? drm_bo->width : gbm_bo_get_width(drm_bo), getenv("NO_GBM") ? drm_bo->height : gbm_bo_get_height(drm_bo), 24, 32, getenv("NO_GBM") ? drm_bo->stride : gbm_bo_get_stride(drm_bo), getenv("NO_GBM") ? drm_bo->handle : gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
             drmModeSetCrtc(drm_fd, drm_encoder->crtc_id, drm_fb_id, 0, 0, &drm_connector->connector_id, 1, &drm_connector->modes[0]);
             if (getenv("NO_GBM")) {
               drm_bo->user_data = (void *)(uintptr_t)drm_fb_id;

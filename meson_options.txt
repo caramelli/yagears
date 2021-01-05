@@ -2,44 +2,44 @@
 
 option('gl',
         type: 'boolean',
-        description: 'OpenGL 1.0 engine')
+        description: 'OpenGL 1.0 Engine')
 option('glesv1_cm',
         type: 'boolean',
-        description: 'OpenGL ES 1.1 CM engine')
+        description: 'OpenGL ES 1.1 CM Engine')
 option('glesv2',
         type: 'boolean',
-        description: 'OpenGL ES 2.0 engine')
+        description: 'OpenGL ES 2.0 Engine')
 
 option('gl-x11',
         type: 'boolean',
-        description: 'OpenGL extension for Xlib backend')
+        description: 'OpenGL extension for Xlib Backend')
 option('gl-directfb',
         type: 'boolean',
-        description: 'OpenGL extension for DirectFB backend')
+        description: 'OpenGL extension for DirectFB Backend')
 option('gl-fbdev',
         type: 'boolean',
-        description: 'OpenGL extension for Linux Framebuffer backend')
+        description: 'OpenGL extension for Linux Framebuffer Backend')
 option('egl-x11',
         type: 'boolean',
-        description: 'EGL interface for Xlib backend')
+        description: 'EGL interface for Xlib Backend')
 option('egl-directfb',
         type: 'boolean',
-        description: 'EGL interface for DirectFB backend')
+        description: 'EGL interface for DirectFB Backend')
 option('egl-fbdev',
         type: 'boolean',
-        description: 'EGL interface for Linux Framebuffer backend')
+        description: 'EGL interface for Linux Framebuffer Backend')
 option('egl-wayland',
         type: 'boolean',
-        description: 'EGL interface for Wayland backend')
+        description: 'EGL interface for Wayland Backend')
 option('egl-xcb',
         type: 'boolean',
-        description: 'EGL interface for XCB backend')
+        description: 'EGL interface for XCB Backend')
 option('egl-drm',
         type: 'boolean',
-        description: 'EGL interface for DRM backend')
+        description: 'EGL interface for DRM Backend')
 option('egl-rpi',
         type: 'boolean',
-        description: 'EGL interface for Raspberry Pi Dispmanx backend')
+        description: 'EGL interface for Raspberry Pi Dispmanx Backend')
 
 option('vk-x11',
         type: 'boolean',
@@ -56,50 +56,53 @@ option('vk-wayland',
 option('vk-xcb',
         type: 'boolean',
         description: 'Vulkan extension for XCB WSI')
+option('vk-d2d',
+        type: 'boolean',
+        description: 'Vulkan extension for Direct-to-Display WSI')
 
 option('efl',
         type: 'boolean',
-        description: 'EFL GUI toolkit')
+        description: 'EFL GUI Toolkit')
 option('fltk',
         type: 'boolean',
-        description: 'FLTK GUI toolkit')
+        description: 'FLTK GUI Toolkit')
 option('glfw',
         type: 'boolean',
-        description: 'GLFW GUI toolkit')
+        description: 'GLFW GUI Toolkit')
 option('glut',
         type: 'boolean',
-        description: 'GLUT GUI toolkit')
+        description: 'GLUT GUI Toolkit')
 option('gtk',
         type: 'boolean',
-        description: 'GTK+ GUI toolkit')
+        description: 'GTK+ GUI Toolkit')
 option('qt',
         type: 'boolean',
-        description: 'Qt GUI toolkit')
+        description: 'Qt GUI Toolkit')
 option('sdl',
         type: 'boolean',
-        description: 'SDL GUI toolkit')
+        description: 'SDL GUI Toolkit')
 option('sfml',
         type: 'boolean',
-        description: 'SFML GUI toolkit')
+        description: 'SFML GUI Toolkit')
 option('wx',
         type: 'boolean',
-        description: 'wxWidgets GUI toolkit')
+        description: 'wxWidgets GUI Toolkit')
 
 option('with-gtk',
         type: 'combo',
         choices : ['2', '3'],
         value : '3',
-        description: 'GTK+ GUI toolkit version')
+        description: 'GTK+ GUI Toolkit version')
 option('with-qt',
         type: 'combo',
         choices : ['4', '5'],
         value : '5',
-        description: 'Qt GUI toolkit version')
+        description: 'Qt GUI Toolkit version')
 option('with-sdl',
         type: 'combo',
         choices : ['1', '2'],
         value : '2',
-        description: 'SDL GUI toolkit version')
+        description: 'SDL GUI Toolkit version')
 
 option('png',
         type: 'boolean',

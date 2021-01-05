@@ -33,28 +33,49 @@ extern struct list engine_list;
 
 /******************************************************************************/
 
+#define GEAR0 0
+#define GEAR1 1
+#define GEAR2 2
+
 struct gear {
   GLuint list;
 };
 
 struct gears {
-  struct gear *gear1;
-  struct gear *gear2;
-  struct gear *gear3;
+  struct gear *gear[3];
 };
 
-static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
+static void delete_gear(gears_t *gears, int id)
+{
+  struct gear *gear = gears->gear[id];
+
+  if (!gear) {
+    return;
+  }
+
+  if (gear->list) {
+    glDeleteLists(gear->list, 1);
+  }
+
+  free(gear);
+
+  gears->gear[id] = NULL;
+}
+
+static int create_gear(gears_t *gears, int id, float inner, float outer, float width, int teeth, float tooth_depth)
 {
   struct gear *gear;
-  GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
-  GLint i, j;
-  GLenum err;
+  float r0, r1, r2, da, a1, ai, s[5], c[5];
+  int i, j;
+  GLenum err = GL_NO_ERROR;
 
   gear = calloc(1, sizeof(struct gear));
   if (!gear) {
     printf("calloc gear failed\n");
-    return NULL;
+    return -1;
   }
+
+  gears->gear[id] = gear;
 
   gear->list = glGenLists(1);
   if (!gear->list) {
@@ -181,21 +202,27 @@ static struct gear *create_gear(GLfloat inner, GLfloat outer, GLfloat width, GLi
   }
 
   glEndList();
+  err = glGetError();
+  if (err) {
+    printf("glEndList failed: 0x%x\n", err);
+    goto out;
+  }
 
-  return gear;
+  return 0;
 
 out:
-  if (gear->list) {
-    glDeleteLists(gear->list, 1);
-  }
-  free(gear);
-  return NULL;
+  delete_gear(gears, id);
+  return -1;
 }
 
 static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
-  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
-  struct gear *gear = NULL;
+  struct gear *gear = gears->gear[id];
+  const float pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+
+  if (!gear) {
+    return;
+  }
 
   glPushMatrix();
   glLoadIdentity();
@@ -214,23 +241,33 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   else
     glEnable(GL_TEXTURE_2D);
 
-  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
   glCallList(gear->list);
 
   glPopMatrix();
 }
 
-static void delete_gear(gears_t *gears, int id)
-{
-  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
-  glDeleteLists(gear->list, 1);
-
-  free(gear);
-}
-
 /******************************************************************************/
+
+static void gl_gears_term(gears_t *gears)
+{
+  if (!gears) {
+    return;
+  }
+
+  if (gears->gear[GEAR2]) {
+    delete_gear(gears, GEAR2);
+  }
+  if (gears->gear[GEAR1]) {
+    delete_gear(gears, GEAR1);
+  }
+  if (gears->gear[GEAR0]) {
+    delete_gear(gears, GEAR0);
+  }
+
+  printf("%s\n", glGetString(GL_VERSION));
+
+  free(gears);
+}
 
 static gears_t *gl_gears_init(int win_width, int win_height)
 {
@@ -274,22 +311,19 @@ static gears_t *gl_gears_init(int win_width, int win_height)
 
   glClearColor(0, 0, 0, 1);
 
-  glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+  glViewport(0, 0, win_width, win_height);
 
   /* create gears */
 
-  gears->gear1 = create_gear(1.0, 4.0, 1.0, 20, 0.7);
-  if (!gears->gear1) {
+  if (create_gear(gears, GEAR0, 1.0, 4.0, 1.0, 20, 0.7)) {
     goto out;
   }
 
-  gears->gear2 = create_gear(0.5, 2.0, 2.0, 10, 0.7);
-  if (!gears->gear2) {
+  if (create_gear(gears, GEAR1, 0.5, 2.0, 2.0, 10, 0.7)) {
     goto out;
   }
 
-  gears->gear3 = create_gear(1.3, 2.0, 0.5, 10, 0.7);
-  if (!gears->gear3) {
+  if (create_gear(gears, GEAR2, 1.3, 2.0, 0.5, 10, 0.7)) {
     goto out;
   }
 
@@ -302,16 +336,7 @@ static gears_t *gl_gears_init(int win_width, int win_height)
   return gears;
 
 out:
-  if (gears->gear3) {
-    delete_gear(gears, 3);
-  }
-  if (gears->gear2) {
-    delete_gear(gears, 2);
-  }
-  if (gears->gear1) {
-    delete_gear(gears, 1);
-  }
-  free(gears);
+  gl_gears_term(gears);
   return NULL;
 }
 
@@ -328,28 +353,13 @@ static void gl_gears_draw(gears_t *gears, float view_tz, float view_rx, float vi
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glLoadIdentity();
-  glTranslatef(0, 0, (GLfloat)view_tz);
-  glRotatef((GLfloat)view_rx, 1, 0, 0);
-  glRotatef((GLfloat)view_ry, 0, 1, 0);
+  glTranslatef(0, 0, view_tz);
+  glRotatef(view_rx, 1, 0, 0);
+  glRotatef(view_ry, 0, 1, 0);
 
-  draw_gear(gears, 1, -3.0, -2.0,      model_rz     , red);
-  draw_gear(gears, 2,  3.1, -2.0, -2 * model_rz - 9 , green);
-  draw_gear(gears, 3, -3.1,  4.2, -2 * model_rz - 25, blue);
-}
-
-static void gl_gears_term(gears_t *gears)
-{
-  if (!gears) {
-    return;
-  }
-
-  delete_gear(gears, 1);
-  delete_gear(gears, 2);
-  delete_gear(gears, 3);
-
-  printf("%s\n", glGetString(GL_VERSION));
-
-  free(gears);
+  draw_gear(gears, GEAR0, -3.0, -2.0,      model_rz     , red);
+  draw_gear(gears, GEAR1,  3.1, -2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, GEAR2, -3.1,  4.2, -2 * model_rz - 25, blue);
 }
 
 /******************************************************************************/

@@ -115,6 +115,10 @@ static void invert(float *a)
 
 /******************************************************************************/
 
+#define GEAR0 0
+#define GEAR1 1
+#define GEAR2 2
+
 typedef float Vertex[8];
 
 typedef struct {
@@ -162,14 +166,53 @@ struct gears {
   VkCommandPool commandPool;
   VkCommandBuffer commandBuffer;
   VkDescriptorPool descriptorPool;
-  struct gear *gear1;
-  struct gear *gear2;
-  struct gear *gear3;
+  struct gear *gear[3];
   float Projection[16];
   float View[16];
 };
 
-static struct gear *create_gear(gears_t *gears, float inner, float outer, float width, int teeth, float tooth_depth)
+static void delete_gear(gears_t *gears, int id)
+{
+  struct gear *gear = gears->gear[id];
+
+  if (!gear) {
+    return;
+  }
+
+  if (gear->descriptorSet) {
+   vkFreeDescriptorSets(gears->device, gears->descriptorPool, 1, &gear->descriptorSet);
+  }
+  if (gear->ubo_data) {
+    vkUnmapMemory(gears->device, gear->uboMemory);
+  }
+  if (gear->uboMemory) {
+    vkFreeMemory(gears->device, gear->uboMemory, NULL);
+  }
+  if (gear->ubo) {
+    vkDestroyBuffer(gears->device, gear->ubo, NULL);
+  }
+  if (gear->vbo_data) {
+    vkUnmapMemory(gears->device, gear->vboMemory);
+  }
+  if (gear->vboMemory) {
+    vkFreeMemory(gears->device, gear->vboMemory, NULL);
+  }
+  if (gear->vbo) {
+    vkDestroyBuffer(gears->device, gear->vbo, NULL);
+  }
+  if (gear->strips) {
+    free(gear->strips);
+  }
+  if (gear->vertices) {
+    free(gear->vertices);
+  }
+
+  free(gear);
+
+  gears->gear[id] = NULL;
+}
+
+static int create_gear(gears_t *gears, int id, float inner, float outer, float width, int teeth, float tooth_depth)
 {
   struct gear *gear;
   float r0, r1, r2, da, a1, ai, s[5], c[5];
@@ -188,8 +231,10 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   gear = calloc(1, sizeof(struct gear));
   if (!gear) {
     printf("calloc gear failed\n");
-    return NULL;
+    return -1;
   }
+
+  gears->gear[id] = gear;
 
   gear->nvertices = 0;
   gear->vertices = calloc(34 * teeth, sizeof(Vertex));
@@ -433,43 +478,23 @@ static struct gear *create_gear(gears_t *gears, float inner, float outer, float 
   for (k = 0; k < gear->nstrips; k++)
     vkCmdDraw(gears->commandBuffer, gear->strips[k].count, 1, gear->strips[k].begin, 0);
 
-  return gear;
+  return 0;
 
 out:
-  if (gear->ubo_data) {
-    vkUnmapMemory(gears->device, gear->uboMemory);
-  }
-  if (gear->uboMemory) {
-    vkFreeMemory(gears->device, gear->uboMemory, NULL);
-  }
-  if (gear->ubo) {
-    vkDestroyBuffer(gears->device, gear->ubo, NULL);
-  }
-  if (gear->vbo_data) {
-    vkUnmapMemory(gears->device, gear->vboMemory);
-  }
-  if (gear->vboMemory) {
-    vkFreeMemory(gears->device, gear->vboMemory, NULL);
-  }
-  if (gear->vbo) {
-    vkDestroyBuffer(gears->device, gear->vbo, NULL);
-  }
-  if (gear->strips) {
-    free(gear->strips);
-  }
-  if (gear->vertices) {
-    free(gear->vertices);
-  }
-  free(gear);
-  return NULL;
+  delete_gear(gears, id);
+  return -1;
 }
 
 static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
+  struct gear *gear = gears->gear[id];
   const float pos[4] = { 5.0, -5.0, 10.0, 0.0 };
   float ModelView[16], ModelViewProjection[16];
   struct Uniform u;
-  struct gear *gear = NULL;
+
+  if (!gear) {
+    return;
+  }
 
   memcpy(u.LightPos, pos, sizeof(pos));
 
@@ -493,29 +518,78 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   else
     u.TextureEnable = 1;
 
-  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
   memcpy(gear->ubo_data, &u, sizeof(struct Uniform));
 }
 
-static void delete_gear(gears_t *gears, int id)
-{
-  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
-  vkFreeDescriptorSets(gears->device, gears->descriptorPool, 1, &gear->descriptorSet);
-  vkUnmapMemory(gears->device, gear->uboMemory);
-  vkFreeMemory(gears->device, gear->uboMemory, NULL);
-  vkDestroyBuffer(gears->device, gear->ubo, NULL);
-  vkUnmapMemory(gears->device, gear->vboMemory);
-  vkFreeMemory(gears->device, gear->vboMemory, NULL);
-  vkDestroyBuffer(gears->device, gear->vbo, NULL);
-  free(gear->strips);
-  free(gear->vertices);
-
-  free(gear);
-}
-
 /******************************************************************************/
+
+void vk_gears_term(gears_t *gears)
+{
+  if (!gears) {
+    return;
+  }
+
+  if (gears->gear[GEAR2]) {
+    delete_gear(gears, GEAR2);
+  }
+  if (gears->gear[GEAR1]) {
+    delete_gear(gears, GEAR1);
+  }
+  if (gears->gear[GEAR0]) {
+    delete_gear(gears, GEAR0);
+  }
+  if (gears->descriptorPool) {
+    vkDestroyDescriptorPool(gears->device, gears->descriptorPool, NULL);
+  }
+  if (gears->commandBuffer) {
+    vkFreeCommandBuffers(gears->device, gears->commandPool, 1, &gears->commandBuffer);
+  }
+  if (gears->commandPool) {
+    vkDestroyCommandPool(gears->device, gears->commandPool, NULL);
+  }
+  if (gears->sampler) {
+    vkDestroySampler(gears->device, gears->sampler, NULL);
+  }
+  if (gears->texture) {
+    vkDestroyImageView(gears->device, gears->texture, NULL);
+  }
+  if (gears->textureMemory) {
+    vkUnmapMemory(gears->device, gears->textureMemory);
+    vkFreeMemory(gears->device, gears->textureMemory, NULL);
+  }
+  if (gears->textureImage) {
+    vkDestroyImage(gears->device, gears->textureImage, NULL);
+  }
+  if (gears->pipeline) {
+    vkDestroyPipeline(gears->device, gears->pipeline, NULL);
+  }
+  if (gears->pipelineLayout) {
+    vkDestroyPipelineLayout(gears->device, gears->pipelineLayout, NULL);
+  }
+  if (gears->descriptorSetLayout) {
+    vkDestroyDescriptorSetLayout(gears->device, gears->descriptorSetLayout, NULL);
+  }
+  if (gears->renderPass) {
+    vkDestroyRenderPass(gears->device, gears->renderPass, NULL);
+  }
+  if (gears->framebuffer) {
+    vkDestroyFramebuffer(gears->device, gears->framebuffer, NULL);
+  }
+  if (gears->imageView[1]) {
+    vkDestroyImageView(gears->device, gears->imageView[1], NULL);
+  }
+  if (gears->imageView[0]) {
+    vkDestroyImageView(gears->device, gears->imageView[0], NULL);
+  }
+  if (gears->depthMemory) {
+    vkFreeMemory(gears->device, gears->depthMemory, NULL);
+  }
+  if (gears->depthImage) {
+    vkDestroyImage(gears->device, gears->depthImage, NULL);
+  }
+
+  free(gears);
+}
 
 gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapchain)
 {
@@ -938,18 +1012,15 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
 
   /* create gears */
 
-  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7);
-  if (!gears->gear1) {
+  if (create_gear(gears, GEAR0, 1.0, 4.0, 1.0, 20, 0.7)) {
     goto out;
   }
 
-  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7);
-  if (!gears->gear2) {
+  if (create_gear(gears, GEAR1, 0.5, 2.0, 2.0, 10, 0.7)) {
     goto out;
   }
 
-  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7);
-  if (!gears->gear3) {
+  if (create_gear(gears, GEAR2, 1.3, 2.0, 0.5, 10, 0.7)) {
     goto out;
   }
 
@@ -971,73 +1042,13 @@ gears_t *vk_gears_init(int win_width, int win_height, void *device, void *swapch
   return gears;
 
 out:
-  if (gears->gear3) {
-    delete_gear(gears, 3);
-  }
-  if (gears->gear2) {
-    delete_gear(gears, 2);
-  }
-  if (gears->gear1) {
-    delete_gear(gears, 1);
-  }
-  if (gears->descriptorPool) {
-    vkDestroyDescriptorPool(gears->device, gears->descriptorPool, NULL);
-  }
-  if (gears->commandBuffer) {
-    vkFreeCommandBuffers(gears->device, gears->commandPool, 1, &gears->commandBuffer);
-  }
-  if (gears->commandPool) {
-    vkDestroyCommandPool(gears->device, gears->commandPool, NULL);
-  }
-  if (gears->sampler) {
-    vkDestroySampler(gears->device, gears->sampler, NULL);
-  }
-  if (gears->texture) {
-    vkDestroyImageView(gears->device, gears->texture, NULL);
-  }
-  if (texture_data) {
-    vkUnmapMemory(gears->device, gears->textureMemory);
-  }
-  if (gears->textureMemory) {
-    vkFreeMemory(gears->device, gears->textureMemory, NULL);
-  }
-  if (gears->textureImage) {
-    vkDestroyImage(gears->device, gears->textureImage, NULL);
-  }
-  if (gears->pipeline) {
-    vkDestroyPipeline(gears->device, gears->pipeline, NULL);
-  }
-  if (gears->pipelineLayout) {
-    vkDestroyPipelineLayout(gears->device, gears->pipelineLayout, NULL);
-  }
-  if (gears->descriptorSetLayout) {
-    vkDestroyDescriptorSetLayout(gears->device, gears->descriptorSetLayout, NULL);
-  }
   if (fragShaderModule) {
     vkDestroyShaderModule(gears->device, fragShaderModule, NULL);
   }
   if (vertShaderModule) {
     vkDestroyShaderModule(gears->device, vertShaderModule, NULL);
   }
-  if (gears->renderPass) {
-    vkDestroyRenderPass(gears->device, gears->renderPass, NULL);
-  }
-  if (gears->framebuffer) {
-    vkDestroyFramebuffer(gears->device, gears->framebuffer, NULL);
-  }
-  if (gears->imageView[1]) {
-    vkDestroyImageView(gears->device, gears->imageView[1], NULL);
-  }
-  if (gears->imageView[0]) {
-    vkDestroyImageView(gears->device, gears->imageView[0], NULL);
-  }
-  if (gears->depthMemory) {
-    vkFreeMemory(gears->device, gears->depthMemory, NULL);
-  }
-  if (gears->depthImage) {
-    vkDestroyImage(gears->device, gears->depthImage, NULL);
-  }
-  free(gears);
+  vk_gears_term(gears);
   return NULL;
 }
 
@@ -1058,9 +1069,9 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   rotate(gears->View, view_rx, 1, 0, 0);
   rotate(gears->View, view_ry, 0, 1, 0);
 
-  draw_gear(gears, 1, -3.0,  2.0,      model_rz     , red);
-  draw_gear(gears, 2,  3.1,  2.0, -2 * model_rz - 9 , green);
-  draw_gear(gears, 3, -3.1, -4.2, -2 * model_rz - 25, blue);
+  draw_gear(gears, GEAR0, -3.0,  2.0,      model_rz     , red);
+  draw_gear(gears, GEAR1,  3.1,  2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, GEAR2, -3.1, -4.2, -2 * model_rz - 25, blue);
 
   memset(&submitInfo, 0, sizeof(VkSubmitInfo));
   submitInfo.commandBufferCount = 1;
@@ -1069,34 +1080,4 @@ void vk_gears_draw(gears_t *gears, float view_tz, float view_rx, float view_ry, 
   if (res) {
     printf("vkEndCommandBuffer failed: %d\n", res);
   }
-}
-
-void vk_gears_term(gears_t *gears)
-{
-  if (!gears) {
-    return;
-  }
-
-  delete_gear(gears, 1);
-  delete_gear(gears, 2);
-  delete_gear(gears, 3);
-  vkDestroyDescriptorPool(gears->device, gears->descriptorPool, NULL);
-  vkFreeCommandBuffers(gears->device, gears->commandPool, 1, &gears->commandBuffer);
-  vkDestroyCommandPool(gears->device, gears->commandPool, NULL);
-  vkDestroySampler(gears->device, gears->sampler, NULL);
-  vkDestroyImageView(gears->device, gears->texture, NULL);
-  vkUnmapMemory(gears->device, gears->textureMemory);
-  vkFreeMemory(gears->device, gears->textureMemory, NULL);
-  vkDestroyImage(gears->device, gears->textureImage, NULL);
-  vkDestroyPipeline(gears->device, gears->pipeline, NULL);
-  vkDestroyPipelineLayout(gears->device, gears->pipelineLayout, NULL);
-  vkDestroyDescriptorSetLayout(gears->device, gears->descriptorSetLayout, NULL);
-  vkDestroyRenderPass(gears->device, gears->renderPass, NULL);
-  vkDestroyFramebuffer(gears->device, gears->framebuffer, NULL);
-  vkDestroyImageView(gears->device, gears->imageView[1], NULL);
-  vkDestroyImageView(gears->device, gears->imageView[0], NULL);
-  vkFreeMemory(gears->device, gears->depthMemory, NULL);
-  vkDestroyImage(gears->device, gears->depthImage, NULL);
-
-  free(gears);
 }

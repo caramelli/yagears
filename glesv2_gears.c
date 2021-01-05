@@ -33,9 +33,9 @@
 
 extern struct list engine_list;
 
-static void identity(GLfloat *a)
+static void identity(float *a)
 {
-  GLfloat m[16] = {
+  float m[16] = {
     1, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
@@ -45,10 +45,10 @@ static void identity(GLfloat *a)
   memcpy(a, m, sizeof(m));
 }
 
-static void multiply(GLfloat *a, const GLfloat *b)
+static void multiply(float *a, const float *b)
 {
-  GLfloat m[16];
-  GLint i, j;
+  float m[16];
+  int i, j;
   div_t d;
 
   for (i = 0; i < 16; i++) {
@@ -61,9 +61,9 @@ static void multiply(GLfloat *a, const GLfloat *b)
   memcpy(a, m, sizeof(m));
 }
 
-static void translate(GLfloat *a, GLfloat tx, GLfloat ty, GLfloat tz)
+static void translate(float *a, float tx, float ty, float tz)
 {
-  GLfloat m[16] = {
+  float m[16] = {
      1,  0,  0, 0,
      0,  1,  0, 0,
      0,  0,  1, 0,
@@ -73,13 +73,13 @@ static void translate(GLfloat *a, GLfloat tx, GLfloat ty, GLfloat tz)
   multiply(a, m);
 }
 
-static void rotate(GLfloat *a, GLfloat r, GLfloat ux, GLfloat uy, GLfloat uz)
+static void rotate(float *a, float r, float ux, float uy, float uz)
 {
-  GLfloat s, c;
+  float s, c;
 
   sincosf(r * M_PI / 180, &s, &c);
 
-  GLfloat m[16] = {
+  float m[16] = {
          ux * ux * (1 - c) + c, uy * ux * (1 - c) + uz * s, ux * uz * (1 - c) - uy * s, 0,
     ux * uy * (1 - c) - uz * s,      uy * uy * (1 - c) + c, uy * uz * (1 - c) + ux * s, 0,
     ux * uz * (1 - c) + uy * s, uy * uz * (1 - c) - ux * s,      uz * uz * (1 - c) + c, 0,
@@ -89,9 +89,9 @@ static void rotate(GLfloat *a, GLfloat r, GLfloat ux, GLfloat uy, GLfloat uz)
   multiply(a, m);
 }
 
-static void transpose(GLfloat *a)
+static void transpose(float *a)
 {
-  GLfloat m[16] = {
+  float m[16] = {
     a[0], a[4], a[8],  a[12],
     a[1], a[5], a[9],  a[13],
     a[2], a[6], a[10], a[14],
@@ -101,9 +101,9 @@ static void transpose(GLfloat *a)
   memcpy(a, m, sizeof(m));
 }
 
-static void invert(GLfloat *a)
+static void invert(float *a)
 {
-  GLfloat m[16] = {
+  float m[16] = {
          1,      0,      0, 0,
          0,      1,      0, 0,
          0,      0,      1, 0,
@@ -118,77 +118,106 @@ static void invert(GLfloat *a)
 
 /******************************************************************************/
 
-typedef GLfloat Vertex[8];
+#define GEAR0 0
+#define GEAR1 1
+#define GEAR2 2
+
+typedef float Vertex[8];
 
 typedef struct {
-  GLint begin;
-  GLsizei count;
+  int begin;
+  int count;
 } Strip;
 
 struct gear {
-  GLint nvertices;
+  int nvertices;
   Vertex *vertices;
-  GLint nstrips;
+  int nstrips;
   Strip *strips;
   GLuint vbo;
 };
 
 struct gears {
   void *lib_handle;
-  void (*glEnable)(GLenum);
-  GLuint (*glCreateProgram)();
-  GLuint (*glCreateShader)(GLenum);
-  void (*glShaderSource)(GLuint, GLsizei, const GLchar **, const GLint *);
-  void (*glCompileShader)(GLuint);
-  void (*glGetShaderiv)(GLuint, GLenum, GLint *);
-  void (*glGetShaderInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
-  void (*glAttachShader)(GLuint, GLuint);
-  void (*glBindAttribLocation)(GLuint, GLuint, const GLchar *);
-  void (*glLinkProgram)(GLuint);
-  void (*glGetProgramiv)(GLuint, GLenum, GLint *);
-  void (*glGetProgramInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
-  void (*glUseProgram)(GLuint);
-  int (*glGetUniformLocation)(GLuint, const GLchar *);
-  void (*glUniform4fv)(GLint, GLsizei, const GLfloat *);
-  void (*glUniform1i)(GLint, GLint);
-  void (*glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat *);
-  void (*glTexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *);
-  void (*glTexParameteri)(GLenum, GLenum, GLint);
-  void (*glClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
-  void (*glGenBuffers)(GLsizei, GLuint *);
-  void (*glBindBuffer)(GLenum, GLuint);
-  void (*glBufferData)(GLenum, GLsizeiptr, const GLvoid *, GLenum);
-  void (*glViewport)(GLint, GLint, GLsizei, GLsizei);
-  void (*glClear)(GLbitfield);
-  void (*glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const GLvoid *);
-  void (*glEnableVertexAttribArray)(GLuint);
-  void (*glDrawArrays)(GLenum, GLint, GLsizei);
-  void (*glDisableVertexAttribArray)(GLuint);
-  void (*glDeleteBuffers)(GLsizei, const GLuint *);
-  void (*glDeleteShader)(GLuint);
-  void (*glDeleteProgram)(GLuint);
+  void           (*glAttachShader)(GLuint, GLuint);
+  void           (*glBindAttribLocation)(GLuint, GLuint, const GLchar *);
+  void           (*glBindBuffer)(GLenum, GLuint);
+  void           (*glBufferData)(GLenum, GLsizeiptr, const GLvoid *, GLenum);
+  void           (*glClear)(GLbitfield);
+  void           (*glClearColor)(GLfloat, GLfloat, GLfloat, GLfloat);
+  void           (*glCompileShader)(GLuint);
+  GLuint         (*glCreateProgram)();
+  GLuint         (*glCreateShader)(GLenum);
+  void           (*glDeleteBuffers)(GLsizei, const GLuint *);
+  void           (*glDeleteProgram)(GLuint);
+  void           (*glDeleteShader)(GLuint);
+  void           (*glDisableVertexAttribArray)(GLuint);
+  void           (*glDrawArrays)(GLenum, GLint, GLsizei);
+  void           (*glEnable)(GLenum);
+  void           (*glEnableVertexAttribArray)(GLuint);
+  void           (*glGenBuffers)(GLsizei, GLuint *);
+  GLenum         (*glGetError)();
+  void           (*glGetProgramInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
+  void           (*glGetProgramiv)(GLuint, GLenum, GLint *);
+  void           (*glGetShaderInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
+  void           (*glGetShaderiv)(GLuint, GLenum, GLint *);
   const GLubyte *(*glGetString)(GLenum);
+  int            (*glGetUniformLocation)(GLuint, const GLchar *);
+  void           (*glLinkProgram)(GLuint);
+  void           (*glShaderSource)(GLuint, GLsizei, const GLchar **, const GLint *);
+  void           (*glUniform1i)(GLint, GLint);
+  void           (*glUniform4fv)(GLint, GLsizei, const GLfloat *);
+  void           (*glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat *);
+  void           (*glUseProgram)(GLuint);
+  void           (*glTexImage2D)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const GLvoid *);
+  void           (*glTexParameteri)(GLenum, GLenum, GLint);
+  void           (*glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const GLvoid *);
+  void           (*glViewport)(GLint, GLint, GLsizei, GLsizei);
   GLuint program;
-  struct gear *gear1;
-  struct gear *gear2;
-  struct gear *gear3;
-  GLfloat Projection[16];
-  GLfloat View[16];
+  struct gear *gear[3];
+  float Projection[16];
+  float View[16];
 };
 
-static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GLfloat width, GLint teeth, GLfloat tooth_depth)
+static void delete_gear(gears_t *gears, int id)
+{
+  struct gear *gear = gears->gear[id];
+
+  if (!gear) {
+    return;
+  }
+
+  if (gear->vbo) {
+    gears->glDeleteBuffers(1, &gear->vbo);
+  }
+  if (gear->strips) {
+    free(gear->strips);
+  }
+  if (gear->vertices) {
+    free(gear->vertices);
+  }
+
+  free(gear);
+
+  gears->gear[id] = NULL;
+}
+
+static int create_gear(gears_t *gears, int id, float inner, float outer, float width, int teeth, float tooth_depth)
 {
   struct gear *gear;
-  GLfloat r0, r1, r2, da, a1, ai, s[5], c[5];
-  GLint i, j;
-  GLfloat n[3], t[2];
-  GLint k = 0;
+  float r0, r1, r2, da, a1, ai, s[5], c[5];
+  int i, j;
+  float n[3], t[2];
+  int k = 0;
+  GLenum err = GL_NO_ERROR;
 
   gear = calloc(1, sizeof(struct gear));
   if (!gear) {
     printf("calloc gear failed\n");
-    return NULL;
+    return -1;
   }
+
+  gears->gear[id] = gear;
 
   gear->nvertices = 0;
   gear->vertices = calloc(34 * teeth, sizeof(Vertex));
@@ -351,29 +380,37 @@ static struct gear *create_gear(gears_t *gears, GLfloat inner, GLfloat outer, GL
   }
 
   gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
+  err = gears->glGetError();
+  if (err) {
+    printf("glBindBuffer failed: 0x%x\n", err);
+    goto out;
+  }
 
   gears->glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
+  err = gears->glGetError();
+  if (err) {
+    printf("glBufferData failed: 0x%x\n", err);
+    goto out;
+  }
 
-  return gear;
+  return 0;
 
 out:
-  if (gear->strips) {
-    free(gear->strips);
-  }
-  if (gear->vertices) {
-    free(gear->vertices);
-  }
-  free(gear);
-  return NULL;
+  delete_gear(gears, id);
+  return -1;
 }
 
 static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, float model_rz, const float *color)
 {
-  const GLfloat pos[4] = { 5.0, 5.0, 10.0, 0.0 };
-  GLfloat ModelView[16], ModelViewProjection[16];
+  struct gear *gear = gears->gear[id];
+  const float pos[4] = { 5.0, 5.0, 10.0, 0.0 };
+  float ModelView[16], ModelViewProjection[16];
   GLint LightPos_loc, ModelViewProjection_loc, Normal_loc, Color_loc, TextureEnable_loc;
-  GLint k;
-  struct gear *gear = NULL;
+  int k;
+
+  if (!gear) {
+    return;
+  }
 
   LightPos_loc = gears->glGetUniformLocation(gears->program, "u_LightPos");
   gears->glUniform4fv(LightPos_loc, 1, pos);
@@ -402,13 +439,11 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   else
     gears->glUniform1i(TextureEnable_loc, 1);
 
-  gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
   gears->glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
   gears->glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
-  gears->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 3);
-  gears->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const GLfloat *)NULL + 6);
+  gears->glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const float *)NULL + 3);
+  gears->glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const float *)NULL + 6);
 
   gears->glEnableVertexAttribArray(0);
   gears->glEnableVertexAttribArray(1);
@@ -423,18 +458,36 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
   gears->glDisableVertexAttribArray(0);
 }
 
-static void delete_gear(gears_t *gears, int id)
-{
-  struct gear *gear = id == 1 ? gears->gear1 : id == 2 ? gears->gear2 : gears->gear3;
-
-  gears->glDeleteBuffers(1, &gear->vbo);
-  free(gear->strips);
-  free(gear->vertices);
-
-  free(gear);
-}
-
 /******************************************************************************/
+
+static void glesv2_gears_term(gears_t *gears)
+{
+  if (!gears) {
+    return;
+  }
+
+  if (gears->gear[GEAR2]) {
+    delete_gear(gears, GEAR2);
+  }
+  if (gears->gear[GEAR1]) {
+    delete_gear(gears, GEAR1);
+  }
+  if (gears->gear[GEAR0]) {
+    delete_gear(gears, GEAR0);
+  }
+  if (gears->program) {
+    gears->glDeleteProgram(gears->program);
+  }
+
+  printf("%s\n", gears->glGetString(GL_VERSION));
+  printf("%s\n", gears->glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+  if (gears->lib_handle) {
+    dlclose(gears->lib_handle);
+  }
+
+  free(gears);
+}
 
 static gears_t *glesv2_gears_init(int win_width, int win_height)
 {
@@ -452,7 +505,7 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   GLuint fragShader = 0;
   int texture_width, texture_height;
   void *texture_data = NULL;
-  const GLfloat zNear = 5, zFar = 60;
+  const float zNear = 5, zFar = 60;
 
   gears = calloc(1, sizeof(gears_t));
   if (!gears) {
@@ -472,39 +525,40 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     goto out; \
   }
 
-  DLSYM(glEnable);
-  DLSYM(glCreateProgram);
-  DLSYM(glCreateShader);
-  DLSYM(glShaderSource);
-  DLSYM(glCompileShader);
-  DLSYM(glGetShaderiv);
-  DLSYM(glGetShaderInfoLog);
   DLSYM(glAttachShader);
   DLSYM(glBindAttribLocation);
-  DLSYM(glLinkProgram);
-  DLSYM(glGetProgramiv);
-  DLSYM(glGetProgramInfoLog);
-  DLSYM(glUseProgram);
-  DLSYM(glGetUniformLocation);
-  DLSYM(glUniform4fv);
-  DLSYM(glUniform1i);
-  DLSYM(glUniformMatrix4fv);
-  DLSYM(glTexImage2D);
-  DLSYM(glTexParameteri);
-  DLSYM(glClearColor);
-  DLSYM(glGenBuffers);
   DLSYM(glBindBuffer);
   DLSYM(glBufferData);
-  DLSYM(glViewport);
   DLSYM(glClear);
-  DLSYM(glVertexAttribPointer);
-  DLSYM(glEnableVertexAttribArray);
-  DLSYM(glDrawArrays);
-  DLSYM(glDisableVertexAttribArray);
+  DLSYM(glClearColor);
+  DLSYM(glCompileShader);
+  DLSYM(glCreateProgram);
+  DLSYM(glCreateShader);
   DLSYM(glDeleteBuffers);
   DLSYM(glDeleteShader);
   DLSYM(glDeleteProgram);
+  DLSYM(glDisableVertexAttribArray);
+  DLSYM(glDrawArrays);
+  DLSYM(glEnable);
+  DLSYM(glEnableVertexAttribArray);
+  DLSYM(glGenBuffers);
+  DLSYM(glGetError);
+  DLSYM(glGetProgramInfoLog);
+  DLSYM(glGetProgramiv);
+  DLSYM(glGetShaderInfoLog);
+  DLSYM(glGetShaderiv);
   DLSYM(glGetString);
+  DLSYM(glGetUniformLocation);
+  DLSYM(glLinkProgram);
+  DLSYM(glShaderSource);
+  DLSYM(glUniform1i);
+  DLSYM(glUniform4fv);
+  DLSYM(glUniformMatrix4fv);
+  DLSYM(glUseProgram);
+  DLSYM(glTexImage2D);
+  DLSYM(glTexParameteri);
+  DLSYM(glVertexAttribPointer);
+  DLSYM(glViewport);
 
   gears->glEnable(GL_DEPTH_TEST);
 
@@ -626,28 +680,25 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
 
   gears->glClearColor(0, 0, 0, 1);
 
-  gears->glViewport(0, 0, (GLint)win_width, (GLint)win_height);
+  gears->glViewport(0, 0, win_width, win_height);
 
   /* create gears */
 
-  gears->gear1 = create_gear(gears, 1.0, 4.0, 1.0, 20, 0.7);
-  if (!gears->gear1) {
+  if (create_gear(gears, GEAR0, 1.0, 4.0, 1.0, 20, 0.7)) {
     goto out;
   }
 
-  gears->gear2 = create_gear(gears, 0.5, 2.0, 2.0, 10, 0.7);
-  if (!gears->gear2) {
+  if (create_gear(gears, GEAR1, 0.5, 2.0, 2.0, 10, 0.7)) {
     goto out;
   }
 
-  gears->gear3 = create_gear(gears, 1.3, 2.0, 0.5, 10, 0.7);
-  if (!gears->gear3) {
+  if (create_gear(gears, GEAR2, 1.3, 2.0, 0.5, 10, 0.7)) {
     goto out;
   }
 
   memset(gears->Projection, 0, sizeof(gears->Projection));
   gears->Projection[0] = zNear;
-  gears->Projection[5] = (GLfloat)win_width/win_height * zNear;
+  gears->Projection[5] = (float)win_width/win_height * zNear;
   gears->Projection[10] = -(zFar + zNear) / (zFar - zNear);
   gears->Projection[11] = -1;
   gears->Projection[14] = -2 * zFar * zNear / (zFar - zNear);
@@ -655,28 +706,13 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
   return gears;
 
 out:
-  if (gears->gear3) {
-    delete_gear(gears, 3);
-  }
-  if (gears->gear2) {
-    delete_gear(gears, 2);
-  }
-  if (gears->gear1) {
-    delete_gear(gears, 1);
-  }
   if (fragShader) {
     gears->glDeleteShader(fragShader);
   }
   if (vertShader) {
     gears->glDeleteShader(vertShader);
   }
-  if (gears->program) {
-    gears->glDeleteProgram(gears->program);
-  }
-  if (gears->lib_handle) {
-    dlclose(gears->lib_handle);
-  }
-  free(gears);
+  glesv2_gears_term(gears);
   return NULL;
 }
 
@@ -693,32 +729,13 @@ static void glesv2_gears_draw(gears_t *gears, float view_tz, float view_rx, floa
   gears->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   identity(gears->View);
-  translate(gears->View, 0, 0, (GLfloat)view_tz);
-  rotate(gears->View, (GLfloat)view_rx, 1, 0, 0);
-  rotate(gears->View, (GLfloat)view_ry, 0, 1, 0);
+  translate(gears->View, 0, 0, view_tz);
+  rotate(gears->View, view_rx, 1, 0, 0);
+  rotate(gears->View, view_ry, 0, 1, 0);
 
-  draw_gear(gears, 1, -3.0, -2.0,      model_rz     , red);
-  draw_gear(gears, 2,  3.1, -2.0, -2 * model_rz - 9 , green);
-  draw_gear(gears, 3, -3.1,  4.2, -2 * model_rz - 25, blue);
-}
-
-static void glesv2_gears_term(gears_t *gears)
-{
-  if (!gears) {
-    return;
-  }
-
-  delete_gear(gears, 1);
-  delete_gear(gears, 2);
-  delete_gear(gears, 3);
-  gears->glDeleteProgram(gears->program);
-
-  printf("%s\n", gears->glGetString(GL_VERSION));
-  printf("%s\n", gears->glGetString(GL_SHADING_LANGUAGE_VERSION));
-
-  dlclose(gears->lib_handle);
-
-  free(gears);
+  draw_gear(gears, GEAR0, -3.0, -2.0,      model_rz     , red);
+  draw_gear(gears, GEAR1,  3.1, -2.0, -2 * model_rz - 9 , green);
+  draw_gear(gears, GEAR2, -3.1,  4.2, -2 * model_rz - 25, blue);
 }
 
 /******************************************************************************/
