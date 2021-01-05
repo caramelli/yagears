@@ -1,3 +1,15 @@
+commit 8deca21dd3b6246367485ff201209ecb145a6f5b
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Jan 5 18:17:11 2021 +0100
+
+    add Direct-to-Display support
+
+commit 84a94ce36ee0f02c6fe74b315abaa196738391ba
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Dec 22 12:00:31 2020 +0100
+
+    update ChangeLog
+
 commit facca563aaeca07b70d3d4ecee80099a9fcc6fad
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Tue Dec 22 12:00:16 2020 +0100
