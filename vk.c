@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2020  Nicolas Caramelli
+  Copyright (C) 2013-2021  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -28,8 +28,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #if defined(VK_X11)
 #include <X11/Xutil.h>
@@ -46,8 +46,8 @@
 #define VK_USE_PLATFORM_FBDEV_EXT
 #endif
 #if defined(VK_WAYLAND)
-#include <wayland-client.h>
 #include <sys/mman.h>
+#include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
@@ -761,19 +761,10 @@ int main(int argc, char *argv[])
   #endif
   #if defined(VK_FBDEV)
   if (!strcmp(wsi, "vk-fbdev")) {
-    if (getenv("FRAMEBUFFER")) {
-      fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
-      if (fb_dpy == -1) {
-        printf("open %s failed: %m\n", getenv("FRAMEBUFFER"));
-        goto out;
-      }
-    }
-    else {
-      fb_dpy = open("/dev/fb0", O_RDWR);
-      if (fb_dpy == -1) {
-        printf("open /dev/fb0 failed: %m\n");
-        goto out;
-      }
+    fb_dpy = open(getenv("FRAMEBUFFER") ? getenv("FRAMEBUFFER") : "/dev/fb0", O_RDWR);
+    if (fb_dpy == -1) {
+      printf("open %s failed: %m\n", getenv("FRAMEBUFFER") ? getenv("FRAMEBUFFER") : "/dev/fb0");
+      goto out;
     }
 
     memset(&fb_finfo, 0, sizeof(struct fb_fix_screeninfo));
@@ -982,19 +973,10 @@ int main(int argc, char *argv[])
     fb_win->posx = win_posx;
     fb_win->posy = win_posy;
 
-    if (getenv("KEYBOARD")) {
-      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open %s failed: %m\n", getenv("KEYBOARD"));
-        goto out;
-      }
-    }
-    else {
-      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %m\n");
-        goto out;
-      }
+    fb_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (fb_keyboard == -1) {
+      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      goto out;
     }
   }
   #endif
@@ -1014,7 +996,7 @@ int main(int argc, char *argv[])
 
     wl_shell_surface_set_toplevel(wl_shell_surface);
 
-    #if defined(HAVE_WL_SHELL_SURFACE_SET_POSITION)
+    #ifdef HAVE_WL_SHELL_SURFACE_SET_POSITION
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
     #endif
 
@@ -1051,19 +1033,10 @@ int main(int argc, char *argv[])
   if (!strcmp(wsi, "vk-d2d")) {
     d2d_win = d2d_mode_properties[0].parameters.visibleRegion;
 
-    if (getenv("KEYBOARD")) {
-      d2d_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (d2d_keyboard == -1) {
-        printf("open %s failed: %m\n", getenv("KEYBOARD"));
-        goto out;
-      }
-    }
-    else {
-      d2d_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (d2d_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %m\n");
-        goto out;
-      }
+    d2d_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (d2d_keyboard == -1) {
+      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      goto out;
     }
 
     err = libevdev_new_from_fd(d2d_keyboard, &d2d_evdev);
@@ -1311,8 +1284,8 @@ int main(int argc, char *argv[])
       if (xcb_event) {
         if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
           xcb_keyboard_handle_key(xcb_event);
-          free(xcb_event);
         }
+        free(xcb_event);
       }
     }
     #endif

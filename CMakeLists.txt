@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0)
-project(yagears VERSION 2.5)
+project(yagears VERSION 2.6)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -27,6 +27,7 @@ option(ENABLE_EGL_WAYLAND "EGL interface for Wayland Backend" ON)
 option(ENABLE_EGL_XCB "EGL interface for XCB Backend" ON)
 option(ENABLE_EGL_DRM "EGL interface for DRM Backend" ON)
 option(ENABLE_EGL_RPI "EGL interface for Raspberry Pi Dispmanx Backend" ON)
+option(ENABLE_WAFFLE "Waffle cross-platform wrapper" ON)
 
 option(ENABLE_VK_X11 "Vulkan extension for Xlib WSI" ON)
 option(ENABLE_VK_DIRECTFB "Vulkan extension for DirectFB WSI" ON)
@@ -212,7 +213,7 @@ if(ENABLE_EGL_X11 OR ENABLE_EGL_DIRECTFB OR ENABLE_EGL_FBDEV OR ENABLE_EGL_WAYLA
     endif()
 
     if(ENABLE_EGL_DRM)
-      pkg_check_modules(DRM gbm libdrm libevdev)
+      pkg_check_modules(DRM dri gbm libdrm libevdev)
       if(DRM_FOUND)
         execute_process(COMMAND pkg-config --variable=dridriverdir dri OUTPUT_VARIABLE DRIDRIVERDIR)
         string(STRIP ${DRIDRIVERDIR} DRIDRIVERDIR)
@@ -229,7 +230,9 @@ if(ENABLE_EGL_X11 OR ENABLE_EGL_DIRECTFB OR ENABLE_EGL_FBDEV OR ENABLE_EGL_WAYLA
 
     if(ENABLE_EGL_RPI)
       pkg_check_modules(RPI bcm_host)
-      if(NOT RPI_FOUND)
+      if(RPI_FOUND)
+        list(APPEND RPI_LDFLAGS -lvchostif)
+      else()
         set(ENABLE_EGL_RPI OFF)
       endif()
     endif()
@@ -251,7 +254,15 @@ set(EGL_XCB ${ENABLE_EGL_XCB})
 set(EGL_DRM ${ENABLE_EGL_DRM})
 set(EGL_RPI ${ENABLE_EGL_RPI})
 
-if(NOT ENABLE_GL_X11 AND NOT ENABLE_GL_DIRECTFB AND NOT ENABLE_GL_FBDEV AND NOT ENABLE_EGL_X11 AND NOT ENABLE_EGL_DIRECTFB AND NOT ENABLE_EGL_FBDEV AND NOT ENABLE_EGL_WAYLAND AND NOT ENABLE_EGL_XCB AND NOT ENABLE_EGL_DRM AND NOT ENABLE_EGL_RPI)
+if(ENABLE_WAFFLE)
+  pkg_check_modules(WAFFLE libinput waffle-1)
+  if(NOT WAFFLE_FOUND)
+    set(ENABLE_WAFFLE OFF)
+  endif()
+endif()
+set(WAFFLE ${ENABLE_WAFFLE})
+
+if(NOT ENABLE_GL_X11 AND NOT ENABLE_GL_DIRECTFB AND NOT ENABLE_GL_FBDEV AND NOT ENABLE_EGL_X11 AND NOT ENABLE_EGL_DIRECTFB AND NOT ENABLE_EGL_FBDEV AND NOT ENABLE_EGL_WAYLAND AND NOT ENABLE_EGL_XCB AND NOT ENABLE_EGL_DRM AND NOT ENABLE_EGL_RPI AND NOT ENABLE_WAFFLE)
   message(FATAL_ERROR "No OpenGL Backends found")
 endif()
 
@@ -563,6 +574,7 @@ message("     EGL interface for Wayland      ${ENABLE_EGL_WAYLAND}")
 message("     EGL interface for XCB          ${ENABLE_EGL_XCB}")
 message("     EGL interface for DRM          ${ENABLE_EGL_DRM}")
 message("     EGL interface for RPi Dispmanx ${ENABLE_EGL_RPI}")
+message("  Waffle cross-platform wrapper     ${ENABLE_WAFFLE}")
 message("")
 
 message("")
@@ -649,8 +661,8 @@ target_compile_options(yagears PRIVATE ${GL_CFLAGS} ${GLESV1_CM_CFLAGS} ${GLESV2
 target_link_libraries(yagears ${GL_LDFLAGS} ${GLESV1_CM_LDFLAGS} ${GLESV2_LDFLAGS} ${PNG_LDFLAGS} ${TIFF_LDFLAGS})
 
 add_executable(yagears2 main.c)
-target_compile_options(yagears2 PRIVATE ${EGL_CFLAGS} ${X11_CFLAGS} ${DIRECTFB_CFLAGS} ${WAYLAND_EGL_CFLAGS} ${XCB_CFLAGS} ${DRM_CFLAGS} ${RPI_CFLAGS})
-target_link_libraries(yagears2 -Wl,--whole-archive yagears -Wl,--no-whole-archive ${EGL_LDFLAGS} ${X11_LDFLAGS} ${DIRECTFB_LDFLAGS} ${WAYLAND_EGL_LDFLAGS} ${XCB_LDFLAGS} ${DRM_LDFLAGS} ${RPI_LDFLAGS})
+target_compile_options(yagears2 PRIVATE ${WAFFLE_CFLAGS} ${EGL_CFLAGS} ${X11_CFLAGS} ${DIRECTFB_CFLAGS} ${WAYLAND_EGL_CFLAGS} ${XCB_CFLAGS} ${DRM_CFLAGS} ${RPI_CFLAGS})
+target_link_libraries(yagears2 -Wl,--whole-archive yagears -Wl,--no-whole-archive ${WAFFLE_LDFLAGS} ${EGL_LDFLAGS} ${X11_LDFLAGS} ${DIRECTFB_LDFLAGS} ${WAYLAND_EGL_LDFLAGS} ${XCB_LDFLAGS} ${DRM_LDFLAGS} ${RPI_LDFLAGS})
 install(TARGETS yagears2 DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if(VK)

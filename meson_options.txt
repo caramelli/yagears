@@ -40,6 +40,9 @@ option('egl-drm',
 option('egl-rpi',
         type: 'boolean',
         description: 'EGL interface for Raspberry Pi Dispmanx Backend')
+option('waffle',
+        type: 'boolean',
+        description: 'Waffle cross-platform wrapper')
 
 option('vk-x11',
         type: 'boolean',

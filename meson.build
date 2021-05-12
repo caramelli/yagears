@@ -1,4 +1,4 @@
-project('yagears', 'c', 'cpp', version: '2.5')
+project('yagears', 'c', 'cpp', version: '2.6')
 
 config_h = configuration_data()
 
@@ -23,6 +23,7 @@ enable_egl_wayland = get_option('egl-wayland')
 enable_egl_xcb = get_option('egl-xcb')
 enable_egl_drm = get_option('egl-drm')
 enable_egl_rpi = get_option('egl-rpi')
+enable_waffle = get_option('waffle')
 
 enable_vk_x11 = get_option('vk-x11')
 enable_vk_directfb = get_option('vk-directfb')
@@ -188,12 +189,12 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
       if enable_egl_wayland
         message('Checking for function "wl_shell_surface_set_position"')
         code = '''
-                #include <wayland-client.h>
-                int main()
-                {
-                  wl_shell_surface_set_position(NULL, 0, 0);
-                  return 0;
-                }
+                  #include <wayland-client.h>
+                  int main()
+                  {
+                    wl_shell_surface_set_position(NULL, 0, 0);
+                    return 0;
+                  }
                '''
         if cc.links(code, dependencies: wayland_dep)
           message('"wl_shell_surface_set_position" found')
@@ -215,7 +216,7 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
     endif
 
     if enable_egl_drm
-      drm_dep = [dependency('gbm', required: false), dependency('libdrm', required: false), dependency('libevdev', required: false)]
+      drm_dep = [dependency('dri', required: false), dependency('gbm', required: false), dependency('libdrm', required: false), dependency('libevdev', required: false)]
       foreach dep : drm_dep
         if not dep.found()
           enable_egl_drm = false
@@ -232,7 +233,9 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
 
     if enable_egl_rpi
       rpi_dep = dependency('bcm_host', required: false)
-      if not rpi_dep.found()
+      if rpi_dep.found()
+        rpi_dep = [rpi_dep, cc.find_library('vchostif', dirs: run_command('pkg-config', '--variable=libdir', 'bcm_host').stdout().strip())]
+      else
         enable_egl_rpi = false
       endif
     endif
@@ -254,7 +257,18 @@ config_h.set('EGL_XCB', enable_egl_xcb, description: 'Support for EGL with XCB p
 config_h.set('EGL_DRM', enable_egl_drm, description: 'Support for EGL with DRM platform')
 config_h.set('EGL_RPI', enable_egl_rpi, description: 'Support for EGL with Raspberry Pi Dispmanx platform')
 
-if not enable_gl_x11 and not enable_gl_directfb and not enable_gl_fbdev and not enable_egl_x11 and not enable_egl_directfb and not enable_egl_fbdev and not enable_egl_wayland and not enable_egl_xcb and not enable_egl_drm and not enable_egl_rpi
+waffle_dep = []
+if enable_waffle
+  waffle_dep = [dependency('libinput', required: false), dependency('waffle-1', required: false)]
+  foreach dep : waffle_dep
+    if not dep.found()
+      enable_waffle = false
+    endif
+  endforeach
+endif
+config_h.set('WAFFLE', enable_waffle, description: 'Support for Waffle cross-platform wrapper')
+
+if not enable_gl_x11 and not enable_gl_directfb and not enable_gl_fbdev and not enable_egl_x11 and not enable_egl_directfb and not enable_egl_fbdev and not enable_egl_wayland and not enable_egl_xcb and not enable_egl_drm and not enable_egl_rpi and not enable_waffle
   error('No OpenGL Backends found')
 endif
 
@@ -312,12 +326,12 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
           if enable_vk_wayland
             message('Checking for function "wl_shell_surface_set_position"')
             code = '''
-                    #include <wayland-client.h>
-                    int main()
-                    {
-                      wl_shell_surface_set_position(NULL, 0, 0);
-                      return 0;
-                    }
+                      #include <wayland-client.h>
+                      int main()
+                      {
+                        wl_shell_surface_set_position(NULL, 0, 0);
+                        return 0;
+                      }
                    '''
             if cc.links(code, dependencies: wayland_dep)
               message('"wl_shell_surface_set_position" found')
@@ -562,6 +576,7 @@ message('     EGL interface for Wayland      @0@'.format(enable_egl_wayland))
 message('     EGL interface for XCB          @0@'.format(enable_egl_xcb))
 message('     EGL interface for DRM          @0@'.format(enable_egl_drm))
 message('     EGL interface for RPi Dispmanx @0@'.format(enable_egl_rpi))
+message('  Waffle cross-platform wrapper     @0@'.format(enable_waffle))
 message('')
 
 message('')
@@ -654,7 +669,7 @@ libyagears = static_library('yagears',
 
 executable('yagears2',
            'main.c',
-           dependencies: [egl_dep, x11_dep, directfb_dep, wayland_egl_dep, xcb_dep, drm_dep, rpi_dep],
+           dependencies: [waffle_dep, egl_dep, x11_dep, directfb_dep, wayland_egl_dep, xcb_dep, drm_dep, rpi_dep],
            link_whole: libyagears,
            install: true)
 

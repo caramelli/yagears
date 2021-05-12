@@ -34,9 +34,9 @@ libyagears_la_LIBADD  = @GL_LIBS@ @GLESV1_CM_LIBS@ @GLESV2_LIBS@ @PNG_LIBS@ @TIF
 
 bin_PROGRAMS     = yagears2
 yagears2_SOURCES = main.c
-yagears2_CFLAGS  = @EGL_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_EGL_CFLAGS@ @XCB_CFLAGS@ @DRM_CFLAGS@ @RPI_CFLAGS@
+yagears2_CFLAGS  = @WAFFLE_CFLAGS@ @EGL_CFLAGS@ @X11_CFLAGS@ @DIRECTFB_CFLAGS@ @WAYLAND_EGL_CFLAGS@ @XCB_CFLAGS@ @DRM_CFLAGS@ @RPI_CFLAGS@
 yagears2_LDFLAGS = -Wl,--whole-archive,.libs/libyagears.a,--no-whole-archive
-yagears2_LDADD   = libyagears.la @EGL_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_EGL_LIBS@ @XCB_LIBS@ @DRM_LIBS@ @RPI_LIBS@
+yagears2_LDADD   = libyagears.la @WAFFLE_LIBS@ @EGL_LIBS@ @X11_LIBS@ @DIRECTFB_LIBS@ @WAYLAND_EGL_LIBS@ @XCB_LIBS@ @DRM_LIBS@ @RPI_LIBS@
 
 if VK
 vert.spv: vulkan_gears.vert

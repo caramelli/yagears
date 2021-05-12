@@ -1,4 +1,4 @@
-AC_INIT(yagears, 2.5)
+AC_INIT(yagears, 2.6)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -15,92 +15,95 @@ LIBS="$LIBS -lm"
 # Configuration options
 
 AC_ARG_ENABLE(gl,
-              AS_HELP_STRING(--disable-gl, disable OpenGL 1.0 Engine),
-              enable_gl=no, enable_gl=yes)
+              AS_HELP_STRING(--disable-gl, disable OpenGL 1.0 Engine),,
+              enable_gl=yes)
 AC_ARG_ENABLE(glesv1_cm,
-              AS_HELP_STRING(--disable-glesv1_cm, disable OpenGL ES 1.1 CM Engine),
-              enable_glesv1_cm=no, enable_glesv1_cm=yes)
+              AS_HELP_STRING(--disable-glesv1_cm, disable OpenGL ES 1.1 CM Engine),,
+              enable_glesv1_cm=yes)
 AC_ARG_ENABLE(glesv2,
-              AS_HELP_STRING(--disable-glesv2, disable OpenGL ES 2.0 Engine),
-              enable_glesv2=no, enable_glesv2=yes)
+              AS_HELP_STRING(--disable-glesv2, disable OpenGL ES 2.0 Engine),,
+              enable_glesv2=yes)
 
 AC_ARG_ENABLE(gl-x11,
-              AS_HELP_STRING(--disable-gl-x11, disable OpenGL extension for Xlib Backend),
-              enable_gl_x11=no, enable_gl_x11=yes)
+              AS_HELP_STRING(--disable-gl-x11, disable OpenGL extension for Xlib Backend),,
+              enable_gl_x11=yes)
 AC_ARG_ENABLE(gl-directfb,
-              AS_HELP_STRING(--disable-gl-directfb, disable OpenGL extension for DirectFB Backend),
-              enable_gl_directfb=no, enable_gl_directfb=yes)
+              AS_HELP_STRING(--disable-gl-directfb, disable OpenGL extension for DirectFB Backend),,
+              enable_gl_directfb=yes)
 AC_ARG_ENABLE(gl-fbdev,
-              AS_HELP_STRING(--disable-gl-fbdev, disable OpenGL extension for Linux Framebuffer Backend),
-              enable_gl_fbdev=no, enable_gl_fbdev=yes)
+              AS_HELP_STRING(--disable-gl-fbdev, disable OpenGL extension for Linux Framebuffer Backend),,
+              enable_gl_fbdev=yes)
 AC_ARG_ENABLE(egl-x11,
-              AS_HELP_STRING(--disable-egl-x11, disable EGL interface for Xlib Backend),
-              enable_egl_x11=no, enable_egl_x11=yes)
+              AS_HELP_STRING(--disable-egl-x11, disable EGL interface for Xlib Backend),,
+              enable_egl_x11=yes)
 AC_ARG_ENABLE(egl-directfb,
-              AS_HELP_STRING(--disable-egl-directfb, disable EGL interface for DirectFB Backend),
-              enable_egl_directfb=no, enable_egl_directfb=yes)
+              AS_HELP_STRING(--disable-egl-directfb, disable EGL interface for DirectFB Backend),,
+              enable_egl_directfb=yes)
 AC_ARG_ENABLE(egl-fbdev,
-              AS_HELP_STRING(--disable-egl-fbdev, disable EGL interface for Linux Framebuffer Backend),
-              enable_egl_fbdev=no, enable_egl_fbdev=yes)
+              AS_HELP_STRING(--disable-egl-fbdev, disable EGL interface for Linux Framebuffer Backend),,
+              enable_egl_fbdev=yes)
 AC_ARG_ENABLE(egl-wayland,
-              AS_HELP_STRING(--disable-egl-wayland, disable EGL interface for Wayland Backend),
-              enable_egl_wayland=no, enable_egl_wayland=yes)
+              AS_HELP_STRING(--disable-egl-wayland, disable EGL interface for Wayland Backend),,
+              enable_egl_wayland=yes)
 AC_ARG_ENABLE(egl-xcb,
-              AS_HELP_STRING(--disable-egl-xcb, disable EGL interface for XCB Backend),
-              enable_egl_xcb=no, enable_egl_xcb=yes)
+              AS_HELP_STRING(--disable-egl-xcb, disable EGL interface for XCB Backend),,
+              enable_egl_xcb=yes)
 AC_ARG_ENABLE(egl-drm,
-              AS_HELP_STRING(--disable-egl-drm, disable EGL interface for DRM Backend),
-              enable_egl_drm=no, enable_egl_drm=yes)
+              AS_HELP_STRING(--disable-egl-drm, disable EGL interface for DRM Backend),,
+              enable_egl_drm=yes)
 AC_ARG_ENABLE(egl-rpi,
-              AS_HELP_STRING(--disable-egl-rpi, disable EGL interface for Raspberry Pi Dispmanx Backend),
-              enable_egl_rpi=no, enable_egl_rpi=yes)
+              AS_HELP_STRING(--disable-egl-rpi, disable EGL interface for Raspberry Pi Dispmanx Backend),,
+              enable_egl_rpi=yes)
+AC_ARG_ENABLE(waffle,
+              AS_HELP_STRING(--disable-waffle, disable Waffle cross-platform wrapper),,
+              enable_waffle=yes)
 
 AC_ARG_ENABLE(vk-x11,
-              AS_HELP_STRING(--disable-vk-x11, disable Vulkan extension for Xlib WSI),
-              enable_vk_x11=no, enable_vk_x11=yes)
+              AS_HELP_STRING(--disable-vk-x11, disable Vulkan extension for Xlib WSI),,
+              enable_vk_x11=yes)
 AC_ARG_ENABLE(vk-directfb,
-              AS_HELP_STRING(--disable-vk-directfb, disable Vulkan extension for DirectFB WSI),
-              enable_vk_directfb=no, enable_vk_directfb=yes)
+              AS_HELP_STRING(--disable-vk-directfb, disable Vulkan extension for DirectFB WSI),,
+              enable_vk_directfb=yes)
 AC_ARG_ENABLE(vk-fbdev,
-              AS_HELP_STRING(--disable-vk-fbdev, disable Vulkan extension for Linux Framebuffer WSI),
-              enable_vk_fbdev=no, enable_vk_fbdev=yes)
+              AS_HELP_STRING(--disable-vk-fbdev, disable Vulkan extension for Linux Framebuffer WSI),,
+              enable_vk_fbdev=yes)
 AC_ARG_ENABLE(vk-wayland,
-              AS_HELP_STRING(--disable-vk-wayland, disable Vulkan extension for Wayland WSI),
-              enable_vk_wayland=no, enable_vk_wayland=yes)
+              AS_HELP_STRING(--disable-vk-wayland, disable Vulkan extension for Wayland WSI),,
+              enable_vk_wayland=yes)
 AC_ARG_ENABLE(vk-xcb,
-              AS_HELP_STRING(--disable-vk-xcb, disable Vulkan extension for XCB WSI),
-              enable_vk_xcb=no, enable_vk_xcb=yes)
+              AS_HELP_STRING(--disable-vk-xcb, disable Vulkan extension for XCB WSI),,
+              enable_vk_xcb=yes)
 AC_ARG_ENABLE(vk-d2d,
-              AS_HELP_STRING(--disable-vk-d2d, disable Vulkan extension for Direct-to-Display WSI),
-              enable_vk_d2d=no, enable_vk_d2d=yes)
+              AS_HELP_STRING(--disable-vk-d2d, disable Vulkan extension for Direct-to-Display WSI),,
+              enable_vk_d2d=yes)
 
 AC_ARG_ENABLE(efl,
-              AS_HELP_STRING(--disable-efl, disable EFL GUI Toolkit),
-              enable_efl=no, enable_efl=yes)
+              AS_HELP_STRING(--disable-efl, disable EFL GUI Toolkit),,
+              enable_efl=yes)
 AC_ARG_ENABLE(fltk,
-              AS_HELP_STRING(--disable-fltk, disable FLTK GUI Toolkit),
-              enable_fltk=no, enable_fltk=yes)
+              AS_HELP_STRING(--disable-fltk, disable FLTK GUI Toolkit),,
+              enable_fltk=yes)
 AC_ARG_ENABLE(glfw,
-              AS_HELP_STRING(--disable-glfw, disable GLFW GUI Toolkit),
-              enable_glfw=no, enable_glfw=yes)
+              AS_HELP_STRING(--disable-glfw, disable GLFW GUI Toolkit),,
+              enable_glfw=yes)
 AC_ARG_ENABLE(glut,
-              AS_HELP_STRING(--disable-glut, disable GLUT GUI Toolkit),
-              enable_glut=no, enable_glut=yes)
+              AS_HELP_STRING(--disable-glut, disable GLUT GUI Toolkit),,
+              enable_glut=yes)
 AC_ARG_ENABLE(gtk,
-              AS_HELP_STRING(--disable-gtk, disable GTK+ GUI Toolkit),
-              enable_gtk=no, enable_gtk=yes)
+              AS_HELP_STRING(--disable-gtk, disable GTK+ GUI Toolkit),,
+              enable_gtk=yes)
 AC_ARG_ENABLE(qt,
-              AS_HELP_STRING(--disable-qt, disable Qt GUI Toolkit),
-              enable_qt=no, enable_qt=yes)
+              AS_HELP_STRING(--disable-qt, disable Qt GUI Toolkit),,
+              enable_qt=yes)
 AC_ARG_ENABLE(sdl,
-              AS_HELP_STRING(--disable-sdl, disable SDL GUI Toolkit),
-              enable_sdl=no, enable_sdl=yes)
+              AS_HELP_STRING(--disable-sdl, disable SDL GUI Toolkit),,
+              enable_sdl=yes)
 AC_ARG_ENABLE(sfml,
-              AS_HELP_STRING(--disable-sfml, disable SFML GUI Toolkit),
-              enable_sfml=no, enable_sfml=yes)
+              AS_HELP_STRING(--disable-sfml, disable SFML GUI Toolkit),,
+              enable_sfml=yes)
 AC_ARG_ENABLE(wx,
-              AS_HELP_STRING(--disable-wx, disable wxWidgets GUI Toolkit),
-              enable_wx=no, enable_wx=yes)
+              AS_HELP_STRING(--disable-wx, disable wxWidgets GUI Toolkit),,
+              enable_wx=yes)
 
 AC_ARG_WITH(gtk,
             AS_HELP_STRING(--with-gtk=2|3, GTK+ GUI Toolkit version (default: 3)),
@@ -116,11 +119,11 @@ AC_ARG_WITH(sdl,
             with_sdl=2)
 
 AC_ARG_ENABLE(png,
-              AS_HELP_STRING(--disable-png, disable PNG loader),
-              enable_png=no, enable_png=yes)
+              AS_HELP_STRING(--disable-png, disable PNG loader),,
+              enable_png=yes)
 AC_ARG_ENABLE(tiff,
-              AS_HELP_STRING(--disable-tiff, disable TIFF loader),
-              enable_tiff=no, enable_tiff=yes)
+              AS_HELP_STRING(--disable-tiff, disable TIFF loader),,
+              enable_tiff=yes)
 
 # OpenGL Engines
 
@@ -258,7 +261,7 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
     fi
 
     if test x$enable_egl_drm = xyes; then
-      PKG_CHECK_MODULES(DRM, gbm libdrm libevdev, , enable_egl_drm=no)
+      PKG_CHECK_MODULES(DRM, dri gbm libdrm libevdev, , enable_egl_drm=no)
       if test x$enable_egl_drm = xyes; then
         DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
         MODVERSION=`$PKG_CONFIG --modversion dri`
@@ -271,6 +274,9 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
 
     if test x$enable_egl_rpi = xyes; then
       PKG_CHECK_MODULES(RPI, bcm_host, , enable_egl_rpi=no)
+      if test x$enable_egl_rpi = xyes; then
+        RPI_LIBS="$RPI_LIBS -lvchostif"
+      fi
     fi
   else
     enable_egl_x11=no
@@ -304,7 +310,16 @@ if test x$enable_egl_rpi = xyes; then
   AC_DEFINE(EGL_RPI, , Support for EGL with Raspberry Pi Dispmanx platform)
 fi
 
-if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a x$enable_egl_wayland = xno -a x$enable_egl_xcb = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno; then
+if test x$enable_waffle = xyes; then
+  PKG_CHECK_MODULES(WAFFLE, libinput waffle-1, enable_waffle=yes, enable_waffle=no)
+else
+  enable_waffle=no
+fi
+if test x$enable_waffle = xyes; then
+  AC_DEFINE(WAFFLE, , Support for Waffle cross-platform wrapper)
+fi
+
+if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a x$enable_egl_wayland = xno -a x$enable_egl_xcb = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno -a x$enable_waffle = xno; then
   AC_MSG_ERROR(No OpenGL Backends found)
 fi
 
@@ -342,15 +357,16 @@ if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbd
     if test x$enable_vk_wayland = xyes; then
       AC_CHECK_LIB(vulkan, vkCreateWaylandSurfaceKHR, , enable_vk_wayland=no)
       if test x$enable_vk_wayland = xyes; then
-        if x$enable_egl_wayland = xno; then
+        if test x$enable_egl_wayland = xno; then
           PKG_CHECK_MODULES(WAYLAND, wayland-client xkbcommon, , enable_vk_wayland=no)
           if test x$enable_vk_wayland = xyes; then
             AC_MSG_CHECKING(for wl_shell_surface_set_position)
             save_CFLAGS=$CFLAGS
-            CFLAGS="$CFLAGS `$PKG_CONFIG --cflags wayland-client`"
-            LIBS="$save_LIBS `$PKG_CONFIG --libs wayland-client`"
+            CFLAGS="$CFLAGS $WAYLAND_CFLAGS"
+            LIBS="$save_LIBS $WAYLAND_LIBS"
             AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
             CFLAGS=$save_CFLAGS
+            LIBS="$save_LIBS `$PKG_CONFIG --libs-only-L vulkan`"
           fi
         fi
       fi
@@ -561,6 +577,7 @@ echo "     EGL interface for Wayland      $enable_egl_wayland"
 echo "     EGL interface for XCB          $enable_egl_xcb"
 echo "     EGL interface for DRM          $enable_egl_drm"
 echo "     EGL interface for RPi Dispmanx $enable_egl_rpi"
+echo "  Waffle cross-platform wrapper     $enable_waffle"
 echo
 
 echo

@@ -73,5 +73,8 @@
 /* Support for XCB WSI */
 #cmakedefine VK_XCB
 
+/* Support for Waffle cross-platform wrapper */
+#cmakedefine WAFFLE
+
 /* Support for wxWidgets graphical user interface */
 #cmakedefine WX

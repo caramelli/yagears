@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2020  Nicolas Caramelli
+  Copyright (C) 2013-2021  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -28,8 +28,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #if defined(GL_X11)
 #include <GL/glx.h>
@@ -53,8 +53,8 @@
 #include <linux/input.h>
 #endif
 #if defined(EGL_WAYLAND)
-#include <wayland-egl.h>
 #include <sys/mman.h>
+#include <wayland-egl.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
 #if defined(EGL_XCB)
@@ -64,10 +64,10 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <gbm.h>
+#include <libevdev/libevdev.h>
 #include <limits.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <libevdev/libevdev.h>
 
 struct __DRIextensionRec {
   char *name;
@@ -116,13 +116,21 @@ struct __DRIimageExtensionRec {
 };
 #endif
 #if defined(EGL_RPI)
+#include <bcm_host.h>
 #include <fcntl.h>
 #include <termios.h>
-#include <bcm_host.h>
 #endif
 #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
 #include <EGL/egl.h>
+#endif
+#if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM)
 #include <EGL/eglext.h>
+#endif
+#if defined(WAFFLE)
+#include <fcntl.h>
+#include <libinput.h>
+#include <linux/input.h>
+#include <waffle.h>
 #endif
 
 #include "gears_engine.h"
@@ -720,6 +728,12 @@ static void drm_keyboard_handle_key(struct input_event *event)
 #endif
 
 #if defined(EGL_RPI)
+typedef struct {
+  DISPMANX_ELEMENT_HANDLE_T element;
+  int width;
+  int height;
+} DISPMANX_WINDOW_T;
+
 static void rpi_keyboard_handle_key(char *event)
 {
   if (event) {
@@ -773,6 +787,70 @@ static void rpi_keyboard_handle_key(char *event)
   }
 
 }
+#endif
+
+#if defined(WAFFLE)
+static void waffle_keyboard_handle_key(struct libinput_event_keyboard *event)
+{
+  switch (libinput_event_keyboard_get_key(event)) {
+    case KEY_ESC:
+      sighandler(SIGTERM);
+      return;
+    case KEY_SPACE:
+      animate = !animate;
+      if (animate) {
+        redisplay = 1;
+      }
+      else {
+        redisplay = 0;
+      }
+      return;
+    case KEY_PAGEDOWN:
+      view_tz -= -5.0;
+      break;
+    case KEY_PAGEUP:
+      view_tz += -5.0;
+      break;
+    case KEY_DOWN:
+      view_rx -= 5.0;
+      break;
+    case KEY_UP:
+      view_rx += 5.0;
+      break;
+    case KEY_RIGHT:
+      view_ry -= 5.0;
+      break;
+    case KEY_LEFT:
+      view_ry += 5.0;
+      break;
+    case KEY_T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    redisplay = 1;
+  }
+}
+
+static int waffle_input_handle_open(const char *path, int flags, void *user_data)
+{
+  return open(path, flags);
+}
+
+static void waffle_input_handle_close(int fd, void *user_data)
+{
+  close(fd);
+}
+
+static struct libinput_interface waffle_input_interface = { waffle_input_handle_open, waffle_input_handle_close };
 #endif
 
 /******************************************************************************/
@@ -863,7 +941,7 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_RPI)
   DISPMANX_DISPLAY_HANDLE_T rpi_dpy = DISPMANX_NO_HANDLE;
-  EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
+  DISPMANX_WINDOW_T *rpi_win = NULL;
   DISPMANX_MODEINFO_T rpi_info;
   DISPMANX_UPDATE_HANDLE_T rpi_update = DISPMANX_NO_HANDLE;
   DISPMANX_ELEMENT_HANDLE_T rpi_element = DISPMANX_NO_HANDLE;
@@ -879,6 +957,8 @@ int main(int argc, char *argv[])
   PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT = NULL;
   PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC eglCreatePlatformWindowSurfaceEXT = NULL;
   #endif
+  #endif
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
   EGLDisplay egl_dpy = NULL;
   EGLSurface egl_win = NULL;
   EGLint egl_config_attr[16];
@@ -887,6 +967,16 @@ int main(int argc, char *argv[])
   EGLint egl_ctx_attr[3];
   EGLContext egl_ctx = NULL;
   EGLint egl_major_version = 0, egl_minor_version = 0, egl_depth_size = 0, egl_red_size = 0, egl_green_size = 0, egl_blue_size = 0, egl_alpha_size = 0;
+  #endif
+  #if defined(WAFFLE)
+  struct waffle_display *waffle_dpy = NULL;
+  struct waffle_window *waffle_win = NULL;
+  int waffle_init_attr[3];
+  int waffle_config_attr[16];
+  struct waffle_config *waffle_config = NULL;
+  struct waffle_context *waffle_ctx = NULL;
+  struct libinput *waffle_input = NULL;
+  struct libinput_event *waffle_event = NULL;
   #endif
 
   /* process command line */
@@ -921,6 +1011,9 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_RPI)
   strcat(backends, "egl-rpi ");
+  #endif
+  #if defined(WAFFLE)
+  strcat(backends, "waffle ");
   #endif
 
   while ((opt = getopt(argc, argv, "b:e:h")) != -1) {
@@ -1027,19 +1120,10 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_FBDEV) || defined(EGL_FBDEV)
   if (!strcmp(backend, "gl-fbdev") || !strcmp(backend, "egl-fbdev")) {
-    if (getenv("FRAMEBUFFER")) {
-      fb_dpy = open(getenv("FRAMEBUFFER"), O_RDWR);
-      if (fb_dpy == -1) {
-        printf("open %s failed: %m\n", getenv("FRAMEBUFFER"));
-        goto out;
-      }
-    }
-    else {
-      fb_dpy = open("/dev/fb0", O_RDWR);
-      if (fb_dpy == -1) {
-        printf("open /dev/fb0 failed: %m\n");
-        goto out;
-      }
+    fb_dpy = open(getenv("FRAMEBUFFER") ? getenv("FRAMEBUFFER") : "/dev/fb0", O_RDWR);
+    if (fb_dpy == -1) {
+      printf("open %s failed: %m\n", getenv("FRAMEBUFFER") ? getenv("FRAMEBUFFER") : "/dev/fb0");
+      goto out;
     }
 
     memset(&fb_finfo, 0, sizeof(struct fb_fix_screeninfo));
@@ -1112,19 +1196,10 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    if (getenv("DRICARD")) {
-      drm_fd = open(getenv("DRICARD"), O_RDWR);
-      if (drm_fd == -1) {
-        printf("open %s failed: %m\n", getenv("DRICARD"));
-        goto out;
-      }
-    }
-    else {
-      drm_fd = open("/dev/dri/card0", O_RDWR);
-      if (drm_fd == -1) {
-        printf("open /dev/dri/card0 failed: %m\n");
-        goto out;
-      }
+    drm_fd = open(getenv("DRICARD") ? getenv("DRICARD") : "/dev/dri/card0", O_RDWR);
+    if (drm_fd == -1) {
+      printf("open %s failed: %m\n", getenv("DRICARD") ? getenv("DRICARD") : "/dev/dri/card0");
+      goto out;
     }
 
     if (getenv("NO_GBM")) {
@@ -1188,9 +1263,9 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[0]);
+    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[getenv("CONNECTOR") ? atoi(getenv("CONNECTOR")) : 0]);
     if (!drm_connector) {
-      printf("drmModeGetConnector failed: %m\n");
+      printf("drmModeGetConnector %d failed: %m\n", getenv("CONNECTOR") ? atoi(getenv("CONNECTOR")) : 0);
       goto out;
     }
 
@@ -1229,6 +1304,39 @@ int main(int argc, char *argv[])
 
     win_width = rpi_info.width;
     win_height = rpi_info.height;
+  }
+  #endif
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    if (!getenv("PLATFORM")) {
+      printf("\nPLATFORM is not set:\n"
+             "  19 -> GLX\n"
+             "  20 -> EGL-Wayland\n"
+             "  21 -> EGL-Xlib\n"
+             "  22 -> EGL-DRM\n"
+             "  ...\n\n");
+      goto out;
+    }
+
+    waffle_init_attr[0] = WAFFLE_PLATFORM;
+    waffle_init_attr[1] = atoi(getenv("PLATFORM"));
+    waffle_init_attr[2] = WAFFLE_NONE;
+    err = waffle_init(waffle_init_attr);
+    if (!err) {
+      printf("waffle_init failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
+
+    waffle_dpy = waffle_display_connect(NULL);
+    if (!waffle_dpy) {
+      printf("waffle_display_connect failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
+
+    if (!getenv("WIDTH") || !getenv("HEIGHT")) {
+      printf("WIDTH or HEIGHT is not set\n");
+      goto out;
+    }
   }
   #endif
 
@@ -1281,10 +1389,12 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  egl_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-  if (egl_extension_name && egl_extensions && strstr(egl_extensions, egl_extension_name)) {
-    eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
-    eglCreatePlatformWindowSurfaceEXT = (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC)eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm")) {
+    egl_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+    if (egl_extensions && strstr(egl_extensions, egl_extension_name) && !getenv("NO_EGL_EXT_platform_base")) {
+      eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
+      eglCreatePlatformWindowSurfaceEXT = (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC)eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
+    }
   }
   #endif
   #endif
@@ -1457,6 +1567,8 @@ int main(int argc, char *argv[])
     egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_BLUE_SIZE;
     egl_config_attr[opt++] = 1;
+    egl_config_attr[opt++] = EGL_ALPHA_SIZE;
+    egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_DEPTH_SIZE;
     egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_RENDERABLE_TYPE;
@@ -1481,6 +1593,30 @@ int main(int argc, char *argv[])
     }
 
     egl_config = egl_configs[0];
+  }
+  #endif
+
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    opt = 0;
+    waffle_config_attr[opt++] = WAFFLE_RED_SIZE;
+    waffle_config_attr[opt++] = 1;
+    waffle_config_attr[opt++] = WAFFLE_GREEN_SIZE;
+    waffle_config_attr[opt++] = 1;
+    waffle_config_attr[opt++] = WAFFLE_BLUE_SIZE;
+    waffle_config_attr[opt++] = 1;
+    waffle_config_attr[opt++] = WAFFLE_ALPHA_SIZE;
+    waffle_config_attr[opt++] = 1;
+    waffle_config_attr[opt++] = WAFFLE_DEPTH_SIZE;
+    waffle_config_attr[opt++] = 1;
+    waffle_config_attr[opt++] = WAFFLE_CONTEXT_API;
+    waffle_config_attr[opt++] = !gears_engine_version(gears_engine) ? WAFFLE_CONTEXT_OPENGL : gears_engine_version(gears_engine) == 1 ? WAFFLE_CONTEXT_OPENGL_ES1 : WAFFLE_CONTEXT_OPENGL_ES2;
+    waffle_config_attr[opt++] = WAFFLE_NONE;
+    waffle_config = waffle_config_choose(waffle_dpy, waffle_config_attr);
+    if (!waffle_config) {
+      printf("waffle_config_choose failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
   }
   #endif
 
@@ -1562,19 +1698,10 @@ int main(int argc, char *argv[])
     fb_win->posx = win_posx;
     fb_win->posy = win_posy;
 
-    if (getenv("KEYBOARD")) {
-      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open %s failed: %m\n", getenv("KEYBOARD"));
-        goto out;
-      }
-    }
-    else {
-      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %m\n");
-        goto out;
-      }
+    fb_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (fb_keyboard == -1) {
+      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      goto out;
     }
   }
   #endif
@@ -1594,7 +1721,7 @@ int main(int argc, char *argv[])
 
     wl_shell_surface_set_toplevel(wl_shell_surface);
 
-    #if defined(HAVE_WL_SHELL_SURFACE_SET_POSITION)
+    #ifdef HAVE_WL_SHELL_SURFACE_SET_POSITION
     wl_shell_surface_set_position(wl_shell_surface, win_posx, win_posy);
     #endif
 
@@ -1667,19 +1794,10 @@ int main(int argc, char *argv[])
       }
     }
 
-    if (getenv("KEYBOARD")) {
-      drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open %s failed: %m\n", getenv("KEYBOARD"));
-        goto out;
-      }
-    }
-    else {
-      drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %m\n");
-        goto out;
-      }
+    drm_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (drm_keyboard == -1) {
+      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      goto out;
     }
 
     err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
@@ -1719,9 +1837,9 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    rpi_win = calloc(1, sizeof(EGL_DISPMANX_WINDOW_T));
+    rpi_win = calloc(1, sizeof(DISPMANX_WINDOW_T));
     if (!rpi_win) {
-      printf("EGL_DISPMANX_WINDOW_T calloc failed: %m\n");
+      printf("DISPMANX_WINDOW_T calloc failed: %m\n");
       goto out;
     }
 
@@ -1857,6 +1975,29 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    waffle_win = waffle_window_create(waffle_config, win_width, win_height);
+    if (!waffle_win) {
+      printf("waffle_window_create failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
+
+    waffle_window_show(waffle_win);
+
+    waffle_input = libinput_path_create_context(&waffle_input_interface, NULL);
+    if (!waffle_input) {
+      printf("libinput_path_create_context failed\n");
+      goto out;
+    }
+
+    if (!libinput_path_add_device(waffle_input, getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0")) {
+      printf("libinput_path_add_device %s failed\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      goto out;
+    }
+  }
+  #endif
+
   /* create context and attach it to the window */
 
   #if defined(GL_X11)
@@ -1928,6 +2069,22 @@ int main(int argc, char *argv[])
     }
 
     eglSwapInterval(egl_dpy, 0);
+  }
+  #endif
+
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    waffle_ctx = waffle_context_create(waffle_config, NULL);
+    if (!waffle_ctx) {
+      printf("waffle_context_create failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
+
+    err = waffle_make_current(waffle_dpy, waffle_win, waffle_ctx);
+    if (!err) {
+      printf("waffle_make_current failed: 0x%x\n", waffle_error_get_code());
+      goto out;
+    }
   }
   #endif
 
@@ -2003,6 +2160,12 @@ int main(int argc, char *argv[])
         eglSwapBuffers(egl_dpy, egl_win);
       }
       #endif
+
+      #if defined(WAFFLE)
+      if (!strcmp(backend, "waffle")) {
+        waffle_window_swap_buffers(waffle_win);
+      }
+      #endif
     }
 
     #if defined(GL_X11) || defined(EGL_X11)
@@ -2070,22 +2233,14 @@ int main(int argc, char *argv[])
       if (xcb_event) {
         if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
           xcb_keyboard_handle_key(xcb_event);
-          free(xcb_event);
         }
+        free(xcb_event);
       }
     }
     #endif
     #if defined(EGL_DRM)
     if (!strcmp(backend, "egl-drm")) {
       if (redisplay) {
-        if (drm_bo) {
-          if (getenv("NO_GBM")) {
-            drm_dpy->surface_release_buffer(drm_win, drm_bo);
-          }
-          else {
-            gbm_surface_release_buffer(drm_win, drm_bo);
-          }
-        }
         if (getenv("NO_GBM")) {
           drm_bo = drm_dpy->surface_lock_front_buffer(drm_win);
         }
@@ -2107,6 +2262,12 @@ int main(int argc, char *argv[])
           }
           drmModePageFlip(drm_fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
           drmHandleEvent(drm_fd, &drm_context);
+          if (getenv("NO_GBM")) {
+            drm_dpy->surface_release_buffer(drm_win, drm_bo);
+          }
+          else {
+            gbm_surface_release_buffer(drm_win, drm_bo);
+          }
         }
         if (!animate) {
           redisplay = 0;
@@ -2132,6 +2293,22 @@ int main(int argc, char *argv[])
         if (rpi_event[0]) {
           rpi_keyboard_handle_key(rpi_event);
         }
+      }
+    }
+    #endif
+    #if defined(WAFFLE)
+    if (!strcmp(backend, "waffle")) {
+      if (!animate && redisplay) {
+        redisplay = 0;
+      }
+
+      libinput_dispatch(waffle_input);
+      waffle_event = libinput_get_event(waffle_input);
+      if (waffle_event && libinput_event_get_type(waffle_event) == LIBINPUT_EVENT_KEYBOARD_KEY) {
+        if (libinput_event_keyboard_get_key_state((struct libinput_event_keyboard *)waffle_event)) {
+          waffle_keyboard_handle_key((struct libinput_event_keyboard *)waffle_event);
+        }
+        libinput_event_destroy(waffle_event);
       }
     }
     #endif
@@ -2183,6 +2360,15 @@ out:
 
   /* destroy context */
 
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    if (waffle_ctx) {
+      waffle_make_current(waffle_dpy, NULL, NULL);
+      waffle_context_destroy(waffle_ctx);
+    }
+  }
+  #endif
+
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_ctx) {
@@ -2219,6 +2405,26 @@ out:
 
   /* destroy window and close display */
 
+  #if defined(WAFFLE)
+  if (!strcmp(backend, "waffle")) {
+    if (waffle_input) {
+      libinput_unref(waffle_input);
+    }
+
+    if (waffle_win) {
+      waffle_window_destroy(waffle_win);
+    }
+
+    if (waffle_config) {
+      waffle_config_destroy(waffle_config);
+    }
+
+    if (waffle_dpy) {
+      waffle_display_disconnect(waffle_dpy);
+    }
+  }
+  #endif
+
   #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm") || !strcmp(backend, "egl-rpi")) {
     if (egl_win) {
@@ -2232,7 +2438,11 @@ out:
     if (egl_dpy) {
       eglTerminate(egl_dpy);
     }
+  }
+  #endif
 
+  #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM)
+  if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm")) {
     #ifdef EGL_EXT_platform_base
     if (eglGetPlatformDisplayEXT) {
       eglGetPlatformDisplayEXT = NULL;
