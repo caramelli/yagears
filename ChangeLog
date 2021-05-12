@@ -1,3 +1,15 @@
+commit e6c1ca80b23d9a423abe201775b3ff1a2e037c2b
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed May 12 12:11:33 2021 +0200
+
+    add Waffle support
+
+commit 01578502dabb96fc8fbe74db21c3decda4f5d501
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Tue Jan 5 18:17:23 2021 +0100
+
+    update ChangeLog
+
 commit 8deca21dd3b6246367485ff201209ecb145a6f5b
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Tue Jan 5 18:17:11 2021 +0100
