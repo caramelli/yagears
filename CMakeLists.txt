@@ -1,5 +1,26 @@
+# yagears                  Yet Another Gears OpenGL / Vulkan demo
+# Copyright (C) 2013-2022  Nicolas Caramelli
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
 cmake_minimum_required(VERSION 3.0)
-project(yagears VERSION 2.6)
+project(yagears VERSION 2.7)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
@@ -9,7 +30,7 @@ include(GNUInstallDirs)
 find_package(PkgConfig)
 
 set(CMAKE_C_FLAGS "-Wall -D_GNU_SOURCE")
-set(CMAKE_EXE_LINKER_FLAGS "-lm")
+link_libraries(m)
 
 # Configuration options
 
@@ -84,7 +105,7 @@ if(NOT ENABLE_GL)
   if(ENABLE_GLESV1_CM)
     pkg_check_modules(GLESV1_CM glesv1_cm)
     if(GLESV1_CM_FOUND)
-      list(APPEND GLESV1_CM_CFLAGS -DGLESV1_CM_H=<GLES/gl.h> -DGLESV1_CM_LIB="libGLESv1_CM.so")
+      list(APPEND GLESV1_CM_CFLAGS -DGLESV1_CM_H=<GLES/gl.h> -DGLESV1_CM_LIB="libGLESv1_CM.so.1")
       set(GLESV1_CM_LDFLAGS -ldl)
     else()
       set(ENABLE_GLESV1_CM OFF)
@@ -95,7 +116,7 @@ if(NOT ENABLE_GL)
     pkg_check_modules(GLESV2 glesv2)
     find_program(XXD xxd)
     if(GLESV2_FOUND AND XXD)
-      list(APPEND GLESV2_CFLAGS -DGLESV2_H=<GLES2/gl2.h> -DGLESV2_LIB="libGLESv2.so")
+      list(APPEND GLESV2_CFLAGS -DGLESV2_H=<GLES2/gl2.h> -DGLESV2_LIB="libGLESv2.so.2")
       set(GLESV2_LDFLAGS -ldl)
     else()
       set(ENABLE_GLESV2 OFF)
@@ -213,16 +234,20 @@ if(ENABLE_EGL_X11 OR ENABLE_EGL_DIRECTFB OR ENABLE_EGL_FBDEV OR ENABLE_EGL_WAYLA
     endif()
 
     if(ENABLE_EGL_DRM)
-      pkg_check_modules(DRM dri gbm libdrm libevdev)
+      pkg_check_modules(DRM gbm libdrm libevdev)
       if(DRM_FOUND)
-        execute_process(COMMAND pkg-config --variable=dridriverdir dri OUTPUT_VARIABLE DRIDRIVERDIR)
-        string(STRIP ${DRIDRIVERDIR} DRIDRIVERDIR)
-        execute_process(COMMAND pkg-config --modversion dri OUTPUT_VARIABLE MODVERSION)
-        string(STRIP ${MODVERSION} MODVERSION)
-        string(REGEX REPLACE "([0-9]+).([0-9]+).([0-9]+)" \\1 DRIMAJORVERSION ${MODVERSION})
-        string(REGEX REPLACE "([0-9]+).([0-9]+).([0-9]+)" \\2 DRIMINORVERSION ${MODVERSION})
-        list(APPEND DRM_CFLAGS -DDRI_DRIVERDIR="${DRIDRIVERDIR}" -DDRI_MAJOR_VERSION=${DRIMAJORVERSION} -DDRI_MINOR_VERSION=${DRIMINORVERSION})
-        list(APPEND DRM_LDFLAGS -ldl)
+        pkg_check_modules(DRI dri)
+        if(DRI_FOUND)
+          execute_process(COMMAND pkg-config --variable=dridriverdir dri OUTPUT_VARIABLE DRIDRIVERDIR)
+          string(STRIP ${DRIDRIVERDIR} DRIDRIVERDIR)
+          execute_process(COMMAND pkg-config --modversion dri OUTPUT_VARIABLE MODVERSION)
+          string(STRIP ${MODVERSION} MODVERSION)
+          string(REGEX REPLACE "([0-9]+).([0-9]+).([0-9]+)" \\1 DRIMAJORVERSION ${MODVERSION})
+          string(REGEX REPLACE "([0-9]+).([0-9]+).([0-9]+)" \\2 DRIMINORVERSION ${MODVERSION})
+          list(APPEND DRM_CFLAGS -DDRI_DRIVERDIR="${DRIDRIVERDIR}" -DDRI_MAJOR_VERSION=${DRIMAJORVERSION} -DDRI_MINOR_VERSION=${DRIMINORVERSION})
+          list(APPEND DRM_LDFLAGS -ldl)
+          set(HAVE_DRI ON)
+        endif()
       else()
         set(ENABLE_EGL_DRM OFF)
       endif()
@@ -426,6 +451,8 @@ if(ENABLE_GLUT)
     check_library_exists(glut glutExit "" GLUT_FOUND)
     if(NOT GLUT_FOUND)
       set(ENABLE_GLUT OFF)
+    else()
+      set(GLUT_LDFLAGS -lglut)
     endif()
   endif()
 endif()

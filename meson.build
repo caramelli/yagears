@@ -1,4 +1,25 @@
-project('yagears', 'c', 'cpp', version: '2.6')
+# yagears                  Yet Another Gears OpenGL / Vulkan demo
+# Copyright (C) 2013-2022  Nicolas Caramelli
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+project('yagears', 'c', 'cpp', version: '2.7')
 
 config_h = configuration_data()
 
@@ -81,7 +102,7 @@ if not enable_gl
     glesv1_cm_dep = dependency('glesv1_cm', required: false)
     if glesv1_cm_dep.found()
       glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm').stdout().strip().split(' '))
-      glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
+      glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so.1"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
     else
       enable_glesv1_cm = false
     endif
@@ -92,7 +113,7 @@ if not enable_gl
     xxd = find_program('xxd', required: false)
     if glesv2_dep.found() and xxd.found()
       glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2').stdout().strip().split(' '))
-      glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so"'], link_args: '-ldl', dependencies: glesv2_dep)
+      glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so.2"'], link_args: '-ldl', dependencies: glesv2_dep)
     else
       enable_glesv2 = false
     endif
@@ -216,18 +237,22 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
     endif
 
     if enable_egl_drm
-      drm_dep = [dependency('dri', required: false), dependency('gbm', required: false), dependency('libdrm', required: false), dependency('libevdev', required: false)]
+      drm_dep = [dependency('gbm', required: false), dependency('libdrm', required: false), dependency('libevdev', required: false)]
       foreach dep : drm_dep
         if not dep.found()
           enable_egl_drm = false
         endif
       endforeach
       if enable_egl_drm
-        dridriverdir = run_command('pkg-config', '--variable=dridriverdir', 'dri').stdout().strip()
-        modversion = run_command('pkg-config', '--modversion', 'dri')
-        drimajorversion = modversion.stdout().split('.')[0]
-        driminorversion = modversion.stdout().split('.')[1]
-        drm_dep = declare_dependency(compile_args: ['-DDRI_DRIVERDIR="@0@"'.format(dridriverdir), '-DDRI_MAJOR_VERSION=@0@'.format(drimajorversion), '-DDRI_MINOR_VERSION=@0@'.format(driminorversion)], link_args: '-ldl', dependencies: drm_dep)
+        dri_dep = dependency('dri', required: false)
+        if dri_dep.found()
+          dridriverdir = run_command('pkg-config', '--variable=dridriverdir', 'dri').stdout().strip()
+          modversion = run_command('pkg-config', '--modversion', 'dri')
+          drimajorversion = modversion.stdout().split('.')[0]
+          driminorversion = modversion.stdout().split('.')[1]
+          drm_dep = declare_dependency(compile_args: ['-DDRI_DRIVERDIR="@0@"'.format(dridriverdir), '-DDRI_MAJOR_VERSION=@0@'.format(drimajorversion), '-DDRI_MINOR_VERSION=@0@'.format(driminorversion)], link_args: '-ldl', dependencies: drm_dep)
+          config_h.set('HAVE_DRI', true, description: 'Have Direct Rendering Infrastructure')
+        endif
       endif
     endif
 

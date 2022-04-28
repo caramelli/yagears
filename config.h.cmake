@@ -43,6 +43,9 @@
 /* Support for GTK+ graphical user interface */
 #cmakedefine GTK
 
+/* Have Direct Rendering Infrastructure */
+#cmakedefine HAVE_DRI
+
 /* Have function wl_shell_surface_set_position */
 #cmakedefine HAVE_WL_SHELL_SURFACE_SET_POSITION
 

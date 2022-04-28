@@ -1,4 +1,25 @@
-AC_INIT(yagears, 2.6)
+# yagears                  Yet Another Gears OpenGL / Vulkan demo
+# Copyright (C) 2013-2022  Nicolas Caramelli
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+AC_INIT(yagears, 2.7)
 
 AC_CONFIG_HEADERS(config.h)
 
@@ -151,7 +172,7 @@ if test x$enable_gl = xno; then
   if test x$enable_glesv1_cm = xyes; then
     PKG_CHECK_MODULES(GLESV1_CM, glesv1_cm, , enable_glesv1_cm=no)
     if test x$enable_glesv1_cm = xyes; then
-      GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\> -DGLESV1_CM_LIB=\\\"libGLESv1_CM.so\\\""
+      GLESV1_CM_CFLAGS="$GLESV1_CM_CFLAGS -DGLESV1_CM_H=\<GLES/gl.h\> -DGLESV1_CM_LIB=\\\"libGLESv1_CM.so.1\\\""
       GLESV1_CM_LIBS=-ldl
     fi
   fi
@@ -161,7 +182,7 @@ if test x$enable_gl = xno; then
     if test x$enable_glesv2 = xyes; then
       AC_PATH_TOOL(XXD, xxd)
       if test -n "$XXD"; then
-        GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\> -DGLESV2_LIB=\\\"libGLESv2.so\\\""
+        GLESV2_CFLAGS="$GLESV2_CFLAGS -DGLESV2_H=\<GLES2/gl2.h\> -DGLESV2_LIB=\\\"libGLESv2.so.2\\\""
         GLESV2_LIBS=-ldl
       else
         enable_glesv2=no
@@ -261,14 +282,18 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
     fi
 
     if test x$enable_egl_drm = xyes; then
-      PKG_CHECK_MODULES(DRM, dri gbm libdrm libevdev, , enable_egl_drm=no)
+      PKG_CHECK_MODULES(DRM, gbm libdrm libevdev, , enable_egl_drm=no)
       if test x$enable_egl_drm = xyes; then
-        DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
-        MODVERSION=`$PKG_CONFIG --modversion dri`
-        DRIMAJORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`
-        DRI_MINOR_VERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`
-        DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"$DRIDRIVERDIR\\\" -DDRI_MAJOR_VERSION=$DRIMAJORVERSION -DDRI_MINOR_VERSION=$DRI_MINOR_VERSION"
-        DRM_LIBS="$DRM_LIBS -ldl"
+        PKG_CHECK_MODULES(DRI, dri, have_dri=yes, have_dri=no)
+        if test x$have_dri = xyes; then
+          DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
+          MODVERSION=`$PKG_CONFIG --modversion dri`
+          DRIMAJORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`
+          DRIMINORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`
+          DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"$DRIDRIVERDIR\\\" -DDRI_MAJOR_VERSION=$DRIMAJORVERSION -DDRI_MINOR_VERSION=$DRIMINORVERSION"
+          DRM_LIBS="$DRM_LIBS -ldl"
+          AC_DEFINE(HAVE_DRI, 1, Have Direct Rendering Infrastructure)
+        fi
       fi
     fi
 
@@ -311,7 +336,7 @@ if test x$enable_egl_rpi = xyes; then
 fi
 
 if test x$enable_waffle = xyes; then
-  PKG_CHECK_MODULES(WAFFLE, libinput waffle-1, enable_waffle=yes, enable_waffle=no)
+  PKG_CHECK_MODULES(WAFFLE, libinput waffle-1, , enable_waffle=no)
 else
   enable_waffle=no
 fi

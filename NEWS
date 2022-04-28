@@ -1,3 +1,7 @@
+2.7
+---
+DRI not required for EGL with DRM display
+
 2.6
 ---
 Waffle support

@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2021  Nicolas Caramelli
+  Copyright (C) 2013-2022  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -61,13 +61,14 @@
 #include <xcb/xcb.h>
 #endif
 #if defined(EGL_DRM)
-#include <dlfcn.h>
 #include <fcntl.h>
 #include <gbm.h>
 #include <libevdev/libevdev.h>
-#include <limits.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#ifdef HAVE_DRI
+#include <dlfcn.h>
+#include <limits.h>
 
 struct __DRIextensionRec {
   char *name;
@@ -114,6 +115,7 @@ struct __DRIimageExtensionRec {
   struct __DRIimageRec *(*createImage)(struct __DRIscreenRec *, int, int, int, unsigned int, void *);
   int (*queryImage)(struct __DRIimageRec *, int, int *);
 };
+#endif
 #endif
 #if defined(EGL_RPI)
 #include <bcm_host.h>
@@ -558,6 +560,7 @@ static void xcb_keyboard_handle_key(xcb_generic_event_t *event)
 #define drm_surface gbm_surface
 #define drm_bo gbm_bo
 
+#ifdef HAVE_DRI
 struct drm_display {
   struct drm_display *(*dummy)(int);
   int fd;
@@ -670,6 +673,7 @@ static void drm_destroy_user_data(struct drm_bo *bo, void *data)
 {
   drmModeRmFB(bo->display->fd, (uintptr_t)data);
 }
+#endif
 
 static void gbm_destroy_user_data(struct gbm_bo *bo, void *data)
 {
@@ -925,9 +929,11 @@ int main(int argc, char *argv[])
   struct drm_display *drm_dpy = NULL;
   struct drm_surface *drm_win = NULL;
   int drm_fd = -1;
+  #ifdef HAVE_DRI
   char drm_driver_path[PATH_MAX];
   struct __DRIcoreExtensionRec **drm_driver_extensions = NULL;
   struct __DRIextensionRec *drm_extensions[] = { &image_loader_extension.base, NULL };
+  #endif
   drmModeResPtr drm_resources = NULL;
   drmModeConnectorPtr drm_connector = NULL;
   drmModeEncoderPtr drm_encoder = NULL;
@@ -1202,6 +1208,7 @@ int main(int argc, char *argv[])
       goto out;
     }
 
+    #ifdef HAVE_DRI
     if (getenv("NO_GBM")) {
       drm_dpy = calloc(1, sizeof(struct drm_display));
       if (!drm_dpy) {
@@ -1249,7 +1256,9 @@ int main(int argc, char *argv[])
       drm_dpy->bo_create = drm_bo_create;
       drm_dpy->bo_destroy = drm_bo_destroy;
     }
-    else {
+    else
+    #endif
+    {
       drm_dpy = gbm_create_device(drm_fd);
       if (!drm_dpy) {
         printf("gbm_create_device failed\n");
@@ -1263,22 +1272,65 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[getenv("CONNECTOR") ? atoi(getenv("CONNECTOR")) : 0]);
-    if (!drm_connector) {
-      printf("drmModeGetConnector %d failed: %m\n", getenv("CONNECTOR") ? atoi(getenv("CONNECTOR")) : 0);
-      goto out;
+    for (opt = 0; opt < drm_resources->count_connectors; opt++) {
+      drm_connector = drmModeGetConnector(drm_fd, drm_resources->connectors[opt]);
+      if (!drm_connector) {
+        printf("drmModeGetConnector %d failed: %m\n", opt);
+        continue;
+      }
+      else {
+        if (drm_connector->connection == DRM_MODE_CONNECTED)
+          break;
+        else {
+          drmModeFreeConnector(drm_connector);
+          drm_connector = NULL;
+        }
+      }
     }
 
-    drm_encoder = drmModeGetEncoder(drm_fd, drm_connector->encoder_id);
-    if (!drm_encoder) {
-      printf("drmModeGetEncoder failed: %m\n");
+    if (!drm_connector)
       goto out;
+
+    if (drm_connector->encoder_id) {
+      drm_encoder = drmModeGetEncoder(drm_fd, drm_connector->encoder_id);
+      if (!drm_encoder) {
+        printf("drmModeGetEncoder failed: %m\n");
+        goto out;
+      }
+    }
+    else {
+      for (opt = 0; opt < drm_resources->count_encoders; opt++) {
+        drm_encoder = drmModeGetEncoder(drm_fd, drm_connector->encoders[opt]);
+        if (!drm_encoder) {
+          printf("drmModeGetEncoder %d failed: %m\n", opt);
+          continue;
+        }
+        else
+          break;
+      }
+
+      if (!drm_encoder)
+        goto out;
     }
 
-    drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
-    if (!drm_crtc) {
-      printf("drmModeGetCrtc failed: %m\n");
-      goto out;
+    if (drm_encoder->crtc_id) {
+      drm_crtc = drmModeGetCrtc(drm_fd, drm_encoder->crtc_id);
+      if (!drm_crtc) {
+        printf("drmModeGetCrtc failed: %m\n");
+        goto out;
+      }
+    }
+    else {
+      for (opt = 0; opt < drm_resources->count_crtcs; opt++) {
+        if (drm_encoder->possible_crtcs & (1 << opt))
+          break;
+      }
+
+      drm_crtc = drmModeGetCrtc(drm_fd, drm_resources->crtcs[opt]);
+      if (!drm_crtc) {
+        printf("drmModeGetCrtc %d failed: %m\n", opt);
+        goto out;
+      }
     }
 
     win_width = drm_connector->modes[0].hdisplay;
@@ -1775,6 +1827,7 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
+    #ifdef HAVE_DRI
     if (getenv("NO_GBM")) {
       drm_win = calloc(1, sizeof(struct drm_surface));
       if (!drm_win) {
@@ -1786,8 +1839,10 @@ int main(int argc, char *argv[])
       drm_win->width = drm_connector->modes[0].hdisplay;
       drm_win->height = drm_connector->modes[0].vdisplay;
     }
-    else {
-      drm_win = gbm_surface_create(drm_dpy, drm_connector->modes[0].hdisplay, drm_connector->modes[0].vdisplay, GBM_BO_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
+    else
+    #endif
+    {
+      drm_win = gbm_surface_create(drm_dpy, drm_connector->modes[0].hdisplay, drm_connector->modes[0].vdisplay, GBM_FORMAT_XRGB8888, GBM_BO_USE_SCANOUT);
       if (!drm_win) {
         printf("gbm_surface_create failed\n");
         goto out;
@@ -2241,31 +2296,45 @@ int main(int argc, char *argv[])
     #if defined(EGL_DRM)
     if (!strcmp(backend, "egl-drm")) {
       if (redisplay) {
+        #ifdef HAVE_DRI
         if (getenv("NO_GBM")) {
           drm_bo = drm_dpy->surface_lock_front_buffer(drm_win);
         }
-        else {
+        else
+        #endif
+        {
           drm_bo = gbm_surface_lock_front_buffer(drm_win);
         }
         if (drm_bo) {
-          drm_fb_id = getenv("NO_GBM") ? (uintptr_t)drm_bo->user_data : (uintptr_t)gbm_bo_get_user_data(drm_bo);
-          if(!drm_fb_id) {
-            drmModeAddFB(drm_fd, getenv("NO_GBM") ? drm_bo->width : gbm_bo_get_width(drm_bo), getenv("NO_GBM") ? drm_bo->height : gbm_bo_get_height(drm_bo), 24, 32, getenv("NO_GBM") ? drm_bo->stride : gbm_bo_get_stride(drm_bo), getenv("NO_GBM") ? drm_bo->handle : gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
-            drmModeSetCrtc(drm_fd, drm_encoder->crtc_id, drm_fb_id, 0, 0, &drm_connector->connector_id, 1, &drm_connector->modes[0]);
-            if (getenv("NO_GBM")) {
+          #ifdef HAVE_DRI
+          if (getenv("NO_GBM")) {
+            drm_fb_id = (uintptr_t)drm_bo->user_data;
+            if (!drm_fb_id) {
+              drmModeAddFB(drm_fd, drm_bo->width, drm_bo->height, 24, 32, drm_bo->stride, drm_bo->handle, &drm_fb_id);
+              drmModeSetCrtc(drm_fd, drm_crtc->crtc_id, drm_fb_id, 0, 0, &drm_connector->connector_id, 1, &drm_connector->modes[0]);
               drm_bo->user_data = (void *)(uintptr_t)drm_fb_id;
               drm_bo->destroy_user_data = drm_destroy_user_data;
             }
-            else {
+          }
+          else
+          #endif
+          {
+            drm_fb_id = (uintptr_t)gbm_bo_get_user_data(drm_bo);
+            if (!drm_fb_id) {
+              drmModeAddFB(drm_fd, gbm_bo_get_width(drm_bo), gbm_bo_get_height(drm_bo), 24, 32, gbm_bo_get_stride(drm_bo), gbm_bo_get_handle(drm_bo).u32, &drm_fb_id);
+              drmModeSetCrtc(drm_fd, drm_crtc->crtc_id, drm_fb_id, 0, 0, &drm_connector->connector_id, 1, &drm_connector->modes[0]);
               gbm_bo_set_user_data(drm_bo, (void *)(uintptr_t)drm_fb_id, gbm_destroy_user_data);
             }
           }
-          drmModePageFlip(drm_fd, drm_encoder->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+          drmModePageFlip(drm_fd, drm_crtc->crtc_id, drm_fb_id, DRM_MODE_PAGE_FLIP_EVENT, NULL);
           drmHandleEvent(drm_fd, &drm_context);
+          #ifdef HAVE_DRI
           if (getenv("NO_GBM")) {
             drm_dpy->surface_release_buffer(drm_win, drm_bo);
           }
-          else {
+          else
+          #endif
+          {
             gbm_surface_release_buffer(drm_win, drm_bo);
           }
         }
@@ -2622,10 +2691,13 @@ out:
     }
 
     if (drm_win) {
+      #ifdef HAVE_DRI
       if (getenv("NO_GBM")) {
         free(drm_win);
       }
-      else {
+      else
+      #endif
+      {
         gbm_surface_destroy(drm_win);
       }
     }
@@ -2648,8 +2720,9 @@ out:
     }
 
     if (drm_dpy) {
+      #ifdef HAVE_DRI
       if (getenv("NO_GBM")) {
-        if (!drm_dpy->screen) {
+        if (drm_dpy->screen) {
           for (opt = 0; drm_dpy->driver_configs[opt]; opt++)
             free(drm_dpy->driver_configs[opt]);
           free(drm_dpy->driver_configs);
@@ -2657,13 +2730,15 @@ out:
           drm_dpy->core->destroyScreen(drm_dpy->screen);
         }
 
-        if (!drm_dpy->driver) {
+        if (drm_dpy->driver) {
           dlclose(drm_dpy->driver);
         }
 
         free(drm_dpy);
       }
-      else {
+      else
+      #endif
+      {
         gbm_device_destroy(drm_dpy);
       }
     }
