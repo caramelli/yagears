@@ -1,3 +1,15 @@
+commit 14ab2ec6ac6ccce502a987a765cc62424ccebbe1
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Thu Apr 28 11:33:31 2022 +0200
+
+    DRI is not required for EGL with DRM display
+
+commit eb54dd07f5c8e69b130be5aca7ea6eff293b6b63
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed May 12 12:11:44 2021 +0200
+
+    update ChangeLog
+
 commit e6c1ca80b23d9a423abe201775b3ff1a2e037c2b
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Wed May 12 12:11:33 2021 +0200
