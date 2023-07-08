@@ -1,5 +1,5 @@
 # yagears                  Yet Another Gears OpenGL / Vulkan demo
-# Copyright (C) 2013-2022  Nicolas Caramelli
+# Copyright (C) 2013-2023  Nicolas Caramelli
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +37,8 @@ link_libraries(m)
 option(ENABLE_GL "OpenGL 1.0 Engine" ON)
 option(ENABLE_GLESV1_CM "OpenGL ES 1.1 CM Engine" ON)
 option(ENABLE_GLESV2 "OpenGL ES 2.0 Engine" ON)
+set(WITH_PGL OFF CACHE STRING "PATH to PortableGL platform header")
+set(WITH_PGL_CFLAGS CACHE STRING "CFLAGS for PortableGL platform header")
 
 option(ENABLE_GL_X11 "OpenGL extension for Xlib Backend" ON)
 option(ENABLE_GL_DIRECTFB "OpenGL extension for DirectFB Backend" ON)
@@ -78,6 +80,19 @@ option(ENABLE_PNG "PNG loader" ON)
 option(ENABLE_TIFF "TIFF loader" ON)
 
 # OpenGL Engines
+
+if(NOT WITH_PGL STREQUAL OFF)
+  if(ENABLE_GL OR ENABLE_GLESV1_CM OR ENABLE_GLESV2)
+    message(FATAL_ERROR "OpenGL 1.0, OpenGL ES 1.1 CM and OpenGL ES 2.0 engines incompatible with PortableGL")
+  endif()
+
+  if(EXISTS ${WITH_PGL})
+    STRING(REPLACE " " ";" WITH_PGL_CFLAGS ${WITH_PGL_CFLAGS})
+    set(PGL_CFLAGS -DPGL_H="${WITH_PGL}" ${WITH_PGL_CFLAGS})
+  else()
+    message(FATAL_ERROR "PortableGL platform header not found")
+  endif()
+endif()
 
 if(ENABLE_GL)
   pkg_check_modules(GL gl)
@@ -124,13 +139,13 @@ if(NOT ENABLE_GL)
   endif()
 endif()
 
-if(NOT ENABLE_GL AND NOT ENABLE_GLESV1_CM AND NOT ENABLE_GLESV2)
+if(NOT ENABLE_GL AND NOT ENABLE_GLESV1_CM AND NOT ENABLE_GLESV2 AND WITH_PGL STREQUAL OFF)
   message(FATAL_ERROR "No OpenGL Engines found")
 endif()
 
 # OpenGL Backends
 
-if(ENABLE_GL)
+if(ENABLE_GL OR NOT WITH_PGL STREQUAL OFF)
   if(ENABLE_GL_X11)
     execute_process(COMMAND pkg-config --variable=libdir gl OUTPUT_VARIABLE LIBDIR)
     string(STRIP ${LIBDIR} LIBDIR)
@@ -586,6 +601,7 @@ message("")
 message("  OpenGL 1.0                        ${ENABLE_GL}")
 message("  OpenGL ES 1.1 CM                  ${ENABLE_GLESV1_CM}")
 message("  OpenGL ES 2.0                     ${ENABLE_GLESV2}")
+message("  PortableGL                        ${WITH_PGL}")
 message("")
 
 message("")
@@ -634,6 +650,11 @@ message("")
 set(GL ${ENABLE_GL})
 set(GLESV1_CM ${ENABLE_GLESV1_CM})
 set(GLESV2 ${ENABLE_GLESV2})
+if(WITH_PGL STREQUAL OFF)
+  set(PGL OFF)
+else()
+  set(PGL ON)
+endif()
 
 if(ENABLE_VK_X11 OR ENABLE_VK_DIRECTFB OR ENABLE_VK_FBDEV OR ENABLE_VK_WAYLAND OR ENABLE_VK_XCB OR ENABLE_VK_D2D)
   set(VK ON)
@@ -675,6 +696,10 @@ add_custom_command(OUTPUT ${FRAG_XXD_FILE} COMMAND ${CMAKE_SOURCE_DIR}/xxd.sh ${
 set(GLESV2_SOURCE glesv2_gears.c)
 endif()
 
+if(PGL)
+set(PGL_SOURCE pgl_gears.c)
+endif()
+
 if(PNG)
 set(PNG_SOURCE png_image.c)
 endif()
@@ -683,8 +708,8 @@ if(TIFF)
 set(TIFF_SOURCE tiff_image.c)
 endif()
 
-add_library(yagears gears_engine.c ${GL_SOURCE} ${GLESV1_CM_SOURCE} ${GLESV2_SOURCE} ${VERT_XXD_FILE} ${FRAG_XXD_FILE} image_loader.c ${PNG_SOURCE} ${TIFF_SOURCE})
-target_compile_options(yagears PRIVATE ${GL_CFLAGS} ${GLESV1_CM_CFLAGS} ${GLESV2_CFLAGS} ${PNG_CFLAGS} ${TIFF_CFLAGS})
+add_library(yagears gears_engine.c ${GL_SOURCE} ${GLESV1_CM_SOURCE} ${GLESV2_SOURCE} ${VERT_XXD_FILE} ${FRAG_XXD_FILE} ${PGL_SOURCE} image_loader.c ${PNG_SOURCE} ${TIFF_SOURCE})
+target_compile_options(yagears PRIVATE ${GL_CFLAGS} ${GLESV1_CM_CFLAGS} ${GLESV2_CFLAGS} ${PGL_CFLAGS} ${PNG_CFLAGS} ${TIFF_CFLAGS})
 target_link_libraries(yagears ${GL_LDFLAGS} ${GLESV1_CM_LDFLAGS} ${GLESV2_LDFLAGS} ${PNG_LDFLAGS} ${TIFF_LDFLAGS})
 
 add_executable(yagears2 main.c)

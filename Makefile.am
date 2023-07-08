@@ -19,6 +19,10 @@ BUILT_SOURCES += vert.xxd frag.xxd
 GLESV2_SOURCE = glesv2_gears.c
 endif
 
+if PGL
+PGL_SOURCE = pgl_gears.c
+endif
+
 if PNG
 PNG_SOURCE = png_image.c
 endif
@@ -28,8 +32,8 @@ TIFF_SOURCE = tiff_image.c
 endif
 
 noinst_LTLIBRARIES    = libyagears.la
-libyagears_la_SOURCES = gears_engine.c $(GL_SOURCE) $(GLESV1_CM_SOURCE) $(GLESV2_SOURCE) image_loader.c $(PNG_SOURCE) $(TIFF_SOURCE)
-libyagears_la_CFLAGS  = @GL_CFLAGS@ @GLESV1_CM_CFLAGS@ @GLESV2_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@
+libyagears_la_SOURCES = gears_engine.c $(GL_SOURCE) $(GLESV1_CM_SOURCE) $(GLESV2_SOURCE) $(PGL_SOURCE) image_loader.c $(PNG_SOURCE) $(TIFF_SOURCE)
+libyagears_la_CFLAGS  = @GL_CFLAGS@ @GLESV1_CM_CFLAGS@ @GLESV2_CFLAGS@ @PGL_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@
 libyagears_la_LIBADD  = @GL_LIBS@ @GLESV1_CM_LIBS@ @GLESV2_LIBS@ @PNG_LIBS@ @TIFF_LIBS@
 
 bin_PROGRAMS     = yagears2

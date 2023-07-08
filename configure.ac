@@ -1,5 +1,5 @@
 # yagears                  Yet Another Gears OpenGL / Vulkan demo
-# Copyright (C) 2013-2022  Nicolas Caramelli
+# Copyright (C) 2013-2023  Nicolas Caramelli
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,12 @@ AC_ARG_ENABLE(glesv1_cm,
 AC_ARG_ENABLE(glesv2,
               AS_HELP_STRING(--disable-glesv2, disable OpenGL ES 2.0 Engine),,
               enable_glesv2=yes)
+AC_ARG_WITH(pgl,
+            AS_HELP_STRING(--with-pgl=PATH, PATH to PortableGL platform header),,
+            with_pgl=no)
+AC_ARG_WITH(pgl-cflags,
+            AS_HELP_STRING(--with-pgl-cflags=CFLAGS, CFLAGS for PortableGL platform header),,
+            with_pgl_cflags=)
 
 AC_ARG_ENABLE(gl-x11,
               AS_HELP_STRING(--disable-gl-x11, disable OpenGL extension for Xlib Backend),,
@@ -148,6 +154,19 @@ AC_ARG_ENABLE(tiff,
 
 # OpenGL Engines
 
+if test x$with_pgl != xno; then
+  if test x$enable_gl = xyes -o x$enable_glesv1_cm = xyes -o x$enable_glesv2 = xyes; then
+    AC_MSG_ERROR([OpenGL 1.0, OpenGL ES 1.1 CM and OpenGL ES 2.0 engines incompatible with PortableGL])
+  fi
+
+  if test -f $with_pgl; then
+    PGL_CFLAGS="-DPGL_H=\\\"$with_pgl\\\" $with_pgl_cflags"
+    AC_SUBST(PGL_CFLAGS)
+  else
+    AC_MSG_ERROR(PortableGL platform header not found)
+  fi
+fi
+
 if test x$enable_gl = xyes; then
   PKG_CHECK_MODULES(GL, gl, , enable_gl=no)
   if test x$enable_gl = xyes; then
@@ -191,13 +210,13 @@ if test x$enable_gl = xno; then
   fi
 fi
 
-if test x$enable_gl = xno -a x$enable_glesv1_cm = xno -a x$enable_glesv2 = xno; then
+if test x$enable_gl = xno -a x$enable_glesv1_cm = xno -a x$enable_glesv2 = xno -a x$with_pgl = xno; then
   AC_MSG_ERROR(No OpenGL Engines found)
 fi
 
 # OpenGL Backends
 
-if test x$enable_gl = xyes; then
+if test x$enable_gl = xyes -o x$with_pgl != xno; then
   if test x$enable_gl_x11 = xyes; then
     save_LIBS=$LIBS
     LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
@@ -587,6 +606,7 @@ echo
 echo "  OpenGL 1.0                        $enable_gl"
 echo "  OpenGL ES 1.1 CM                  $enable_glesv1_cm"
 echo "  OpenGL ES 2.0                     $enable_glesv2"
+echo "  PortableGL                        $with_pgl"
 echo
 
 echo
@@ -635,6 +655,7 @@ echo
 AM_CONDITIONAL(GL, test x$enable_gl = xyes)
 AM_CONDITIONAL(GLESV1_CM, test x$enable_glesv1_cm = xyes)
 AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
+AM_CONDITIONAL(PGL, test x$with_pgl != xno)
 
 AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes)
 

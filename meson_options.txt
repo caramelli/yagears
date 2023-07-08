@@ -9,6 +9,13 @@ option('glesv1_cm',
 option('glesv2',
         type: 'boolean',
         description: 'OpenGL ES 2.0 Engine')
+option('pgl',
+        type: 'string',
+        value : 'false',
+        description: 'PATH to PortableGL platform header')
+option('pgl-cflags',
+        type: 'string',
+        description: 'CFLAGS for PortableGL platform header')
 
 option('gl-x11',
         type: 'boolean',

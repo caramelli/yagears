@@ -1,5 +1,5 @@
 # yagears                  Yet Another Gears OpenGL / Vulkan demo
-# Copyright (C) 2013-2022  Nicolas Caramelli
+# Copyright (C) 2013-2023  Nicolas Caramelli
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,11 +19,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-project('yagears', 'c', 'cpp', version: '2.7')
+project('yagears', 'c', 'cpp', version: '2.7', meson_version: '>= 0.57')
 
 config_h = configuration_data()
 
 cc = meson.get_compiler('c')
+
+fs = import('fs')
 
 add_global_arguments('-D_GNU_SOURCE', language: 'c')
 add_global_link_arguments('-lm', language: 'c')
@@ -33,6 +35,7 @@ add_global_link_arguments('-lm', language: 'c')
 enable_gl = get_option('gl')
 enable_glesv1_cm = get_option('glesv1_cm')
 enable_glesv2 = get_option('glesv2')
+with_pgl = get_option('pgl')
 
 enable_gl_x11 = get_option('gl-x11')
 enable_gl_directfb = get_option('gl-directfb')
@@ -71,6 +74,19 @@ enable_png = get_option('png')
 enable_tiff = get_option('tiff')
 
 # OpenGL Engines
+
+pgl_dep = []
+if with_pgl != 'false'
+  if enable_gl or enable_glesv1_cm or enable_glesv2
+    error('OpenGL 1.0, OpenGL ES 1.1 CM and OpenGL ES 2.0 engines incompatible with PortableGL')
+  endif
+
+  if fs.is_file(with_pgl)
+    pgl_dep = declare_dependency(compile_args: ['-DPGL_H="@0@"'.format(with_pgl), get_option('pgl-cflags').split(' ')])
+  else
+    error('PortableGL platform header not found')
+  endif
+endif
 
 gl_dep = []
 if enable_gl
@@ -120,7 +136,7 @@ if not enable_gl
   endif
 endif
 
-if not enable_gl and not enable_glesv1_cm and not enable_glesv2
+if not enable_gl and not enable_glesv1_cm and not enable_glesv2 and with_pgl == 'false'
   error('No OpenGL Engines found')
 endif
 
@@ -128,7 +144,7 @@ endif
 
 x11_dep = []
 directfb_dep = []
-if enable_gl
+if enable_gl or with_pgl != 'false'
   if enable_gl_x11
     libdir = run_command('pkg-config', '--variable=libdir', 'gl').stdout().strip()
     if cc.has_function('glXCreateContext', dependencies: cc.find_library('GL', dirs: libdir))
@@ -586,6 +602,7 @@ message('')
 message('  OpenGL 1.0                        @0@'.format(enable_gl))
 message('  OpenGL ES 1.1 CM                  @0@'.format(enable_glesv1_cm))
 message('  OpenGL ES 2.0                     @0@'.format(enable_glesv2))
+message('  PortableGL                        @0@'.format(with_pgl))
 message('')
 
 message('')
@@ -634,6 +651,7 @@ message('')
 GL = enable_gl
 GLESV1_CM = enable_glesv1_cm
 GLESV2 = enable_glesv2
+PGL = with_pgl != 'false'
 
 if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d
   VK = true
@@ -678,6 +696,11 @@ frag_xxd_file = custom_target('frag_xxd', command: [files('xxd.sh'), '@INPUT@', 
 glesv2_source = 'glesv2_gears.c'
 endif
 
+pgl_source = []
+if PGL
+pgl_source = 'pgl_gears.c'
+endif
+
 png_source = []
 if PNG
 png_source = 'png_image.c'
@@ -689,8 +712,8 @@ tiff_source = 'tiff_image.c'
 endif
 
 libyagears = static_library('yagears',
-                            'gears_engine.c', gl_source, glesv1_cm_source, glesv2_source, vert_xxd_file, frag_xxd_file, 'image_loader.c', png_source, tiff_source,
-                            dependencies: [gl_dep, glesv1_cm_dep, glesv2_dep, png_dep, tiff_dep])
+                            'gears_engine.c', gl_source, glesv1_cm_source, glesv2_source, vert_xxd_file, frag_xxd_file, pgl_source, 'image_loader.c', png_source, tiff_source,
+                            dependencies: [gl_dep, glesv1_cm_dep, glesv2_dep, pgl_dep, png_dep, tiff_dep])
 
 executable('yagears2',
            'main.c',
