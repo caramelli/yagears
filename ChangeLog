@@ -1,3 +1,15 @@
+commit b41630e13f050a60689361e670d4c22f9569d2eb
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jul 8 18:31:47 2023 +0200
+
+    add PortableGL support
+
+commit 8bfab4f8aac8a6b645e513f48763f2ed0867aa73
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Fri Apr 29 13:29:52 2022 +0200
+
+    update ChangeLog
+
 commit 14ab2ec6ac6ccce502a987a765cc62424ccebbe1
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Thu Apr 28 11:33:31 2022 +0200
