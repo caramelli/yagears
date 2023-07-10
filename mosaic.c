@@ -36,6 +36,20 @@ void glutExit();
 
 #include "gears_engine.h"
 
+#if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+#define stringify_engine_ctor(name)       name##_engine_ctor()
+#define engine_ctor(name)                 stringify_engine_ctor(name)
+#define stringify_engine_ctor_proto(name) void name##_engine_ctor()
+#define engine_ctor_proto(name)           stringify_engine_ctor_proto(name)
+
+engine_ctor_proto(YAGEARS_ENGINE);
+#endif
+
+#if defined(YAGEARS_BACKEND) && defined(YAGEARS_ENGINE)
+#define XSTRINGIFY(x) #x
+#define STRINGIFY(x)  XSTRINGIFY(x)
+#endif
+
 #define COLS 4
 #define ROWS 3
 
@@ -159,20 +173,34 @@ static void glutPassiveMotion(int x, int y)
 
 int main(int argc, char *argv[])
 {
+  const char *engine_arg = NULL;
   int opt, i, j;
   int glut_win[COLS * ROWS];
 
-  if (argc != 2) {
-    printf("\n\tUsage: %s Engine : ", argv[0]);
+  #if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+  engine_ctor(YAGEARS_ENGINE);
+  #endif
+
+  #if defined(YAGEARS_ENGINE)
+  if (argc == 1) {
+    engine_arg = STRINGIFY(YAGEARS_ENGINE);
+  }
+  else
+  #endif
+  if (argc != 2 || !strcmp(argv[1], "-h")) {
+    printf("\n\tUsage: %s Engine\n\n", argv[0]);
+    printf("\t\tEngines: ");
     for (opt = 0; opt < gears_engine_nb(); opt++) {
       printf("%s ", gears_engine_name(opt));
     }
     printf("\n\n");
     return EXIT_FAILURE;
   }
+  else
+    engine_arg = argv[1];
 
   for (opt = 0; opt < gears_engine_nb(); opt++) {
-    if (!strcmp(gears_engine_name(opt), argv[1]))
+    if (!strcmp(gears_engine_name(opt), engine_arg))
       break;
   }
 

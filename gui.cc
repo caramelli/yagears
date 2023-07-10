@@ -80,6 +80,22 @@ void fl_close_display();
 
 #include "gears_engine.h"
 
+#if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+#define stringify_engine_ctor(name)       name##_engine_ctor()
+#define engine_ctor(name)                 stringify_engine_ctor(name)
+#define stringify_engine_ctor_proto(name) void name##_engine_ctor()
+#define engine_ctor_proto(name)           stringify_engine_ctor_proto(name)
+
+extern "C" {
+engine_ctor_proto(YAGEARS_ENGINE);
+}
+#endif
+
+#if defined(YAGEARS_TOOLKIT) && defined(YAGEARS_ENGINE)
+#define XSTRINGIFY(x) #x
+#define STRINGIFY(x)  XSTRINGIFY(x)
+#endif
+
 /******************************************************************************/
 
 static char *toolkit = NULL;
@@ -897,7 +913,8 @@ wxAppConsole *WxAppInitializer()
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char toolkits[64], *toolkit_arg = NULL, *engine_arg = NULL, *c;
+  const char *toolkit_arg = NULL, *engine_arg = NULL;
+  char toolkits[64], *c;
   int opt;
   #if defined(EFL)
   Evas_Object *elm_win;
@@ -982,6 +999,17 @@ int main(int argc, char *argv[])
     }
   }
 
+  #if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+  engine_ctor(YAGEARS_ENGINE);
+  #endif
+
+  #if defined(YAGEARS_TOOLKIT) && defined(YAGEARS_ENGINE)
+  if (argc == 1) {
+    toolkit_arg = STRINGIFY(YAGEARS_TOOLKIT);
+    engine_arg = STRINGIFY(YAGEARS_ENGINE);
+  }
+  else
+  #endif
   if (argc != 5 || !toolkit_arg || !engine_arg) {
     printf("\n\tUsage: %s -t Toolkit -e Engine\n\n", argv[0]);
     printf("\t\tToolkits: %s\n\n", toolkits);

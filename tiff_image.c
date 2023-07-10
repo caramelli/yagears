@@ -89,7 +89,7 @@ static loader_t tiffle_loader = {
   tiff_term
 };
 
-static void __attribute__((constructor)) loader_ctor()
+static void __attribute__((constructor)) loader_ctor(void)
 {
   list_add(&tiffbe_loader.entry, &loader_list);
   list_add(&tiffle_loader.entry, &loader_list);

@@ -29,10 +29,16 @@ include(CheckCSourceCompiles)
 include(GNUInstallDirs)
 find_package(PkgConfig)
 
-set(CMAKE_C_FLAGS "-Wall -D_GNU_SOURCE")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -D_GNU_SOURCE")
 link_libraries(m)
 
 # Configuration options
+
+option(ENABLE_ENGINE_CTOR "Use constructor attribute to register an engine" ON)
+
+if(ENABLE_ENGINE_CTOR)
+  add_definitions(-DENGINE_CTOR)
+endif()
 
 option(ENABLE_GL "OpenGL 1.0 Engine" ON)
 option(ENABLE_GLESV1_CM "OpenGL ES 1.1 CM Engine" ON)

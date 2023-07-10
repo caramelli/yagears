@@ -326,14 +326,14 @@ static int create_gear(gears_t *gears, int id, float inner, float outer, float w
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
   err = glGetError();
   if (err) {
-    printf("glBindBuffer failed: 0x%x\n", err);
+    printf("glBindBuffer failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
   glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
   err = glGetError();
   if (err) {
-    printf("glBufferData failed: 0x%x\n", err);
+    printf("glBufferData failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
@@ -384,8 +384,8 @@ static void draw_gear(gears_t *gears, int id, float model_tx, float model_ty, fl
 
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
 
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), 0);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), 3 * sizeof(float));
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), NULL);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (const float *)NULL + 3);
 
   glEnableVertexAttribArray(0);
   glEnableVertexAttribArray(1);
@@ -532,13 +532,17 @@ static void pgl_gears_draw(gears_t *gears, float view_tz, float view_rx, float v
 
 static engine_t pgl_engine = {
   "pgl",
-  2,
+  3,
   pgl_gears_init,
   pgl_gears_draw,
   pgl_gears_term
 };
 
-static void __attribute__((constructor)) engine_ctor()
+void
+#ifdef ENGINE_CTOR
+__attribute__((constructor))
+#endif
+pgl_engine_ctor(void)
 {
   list_add(&pgl_engine.entry, &engine_list);
 }

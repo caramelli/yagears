@@ -137,6 +137,20 @@ struct __DRIimageExtensionRec {
 
 #include "gears_engine.h"
 
+#if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+#define stringify_engine_ctor(name)       name##_engine_ctor()
+#define engine_ctor(name)                 stringify_engine_ctor(name)
+#define stringify_engine_ctor_proto(name) void name##_engine_ctor(void)
+#define engine_ctor_proto(name)           stringify_engine_ctor_proto(name)
+
+engine_ctor_proto(YAGEARS_ENGINE);
+#endif
+
+#if defined(YAGEARS_BACKEND) && defined(YAGEARS_ENGINE)
+#define XSTRINGIFY(x) #x
+#define STRINGIFY(x)  XSTRINGIFY(x)
+#endif
+
 /******************************************************************************/
 
 static char *backend = NULL;
@@ -862,7 +876,8 @@ static struct libinput_interface waffle_input_interface = { waffle_input_handle_
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char backends[64], *backend_arg = NULL, *engine_arg = NULL, *c;
+  const char *backend_arg = NULL, *engine_arg = NULL;
+  char backends[64], *c;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 
@@ -1036,6 +1051,17 @@ int main(int argc, char *argv[])
     }
   }
 
+  #if !defined(ENGINE_CTOR) && defined(YAGEARS_ENGINE)
+  engine_ctor(YAGEARS_ENGINE);
+  #endif
+
+  #if defined(YAGEARS_BACKEND) && defined(YAGEARS_ENGINE)
+  if (argc == 1) {
+    backend_arg = STRINGIFY(YAGEARS_BACKEND);
+    engine_arg = STRINGIFY(YAGEARS_ENGINE);
+  }
+  else
+  #endif
   if (argc != 5 || !backend_arg || !engine_arg) {
     printf("\n\tUsage: %s -b Backend -e Engine\n\n", argv[0]);
     printf("\t\tBackends: %s\n\n", backends);

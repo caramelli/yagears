@@ -522,7 +522,8 @@ static void d2d_keyboard_handle_key(struct input_event *event)
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char wsis[64], *wsi_arg = NULL, *c;
+  const char *wsi_arg = NULL;
+  char wsis[64], *c;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 

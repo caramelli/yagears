@@ -32,6 +32,10 @@ add_global_link_arguments('-lm', language: 'c')
 
 # Configuration options
 
+if get_option('engine-ctor')
+  add_global_arguments('-DENGINE_CTOR', language: 'c')
+endif
+
 enable_gl = get_option('gl')
 enable_glesv1_cm = get_option('glesv1_cm')
 enable_glesv2 = get_option('glesv2')

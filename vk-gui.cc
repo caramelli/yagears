@@ -251,7 +251,8 @@ static void SDL_KeyDownEvent(SDL_Window *window, SDL_Event *event, void *data)
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char toolkits[64], *toolkit_arg = NULL, *c;
+  const char *toolkit_arg = NULL;
+  char toolkits[64], *c;
   int opt;
   #if defined(GLFW)
   GLFWwindow *glfw_win;

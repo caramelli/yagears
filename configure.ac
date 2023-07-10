@@ -35,6 +35,10 @@ LIBS="$LIBS -lm"
 
 # Configuration options
 
+AC_ARG_ENABLE(engine-ctor,
+              AS_HELP_STRING(--disable-engine-ctor, disable use of constructor attribute to register an engine),,
+              CFLAGS="$CFLAGS -DENGINE_CTOR")
+
 AC_ARG_ENABLE(gl,
               AS_HELP_STRING(--disable-gl, disable OpenGL 1.0 Engine),,
               enable_gl=yes)

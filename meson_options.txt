@@ -1,5 +1,9 @@
 # Configuration options
 
+option('engine-ctor',
+       type: 'boolean',
+       description: 'Use constructor attribute to register an engine')
+
 option('gl',
         type: 'boolean',
         description: 'OpenGL 1.0 Engine')

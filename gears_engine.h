@@ -27,7 +27,7 @@ extern "C" {
 
 typedef struct gears_engine gears_engine_t;
 
-int gears_engine_nb();
+int gears_engine_nb(void);
 char *gears_engine_name(int opt);
 gears_engine_t *gears_engine_new(char *name);
 int gears_engine_version(gears_engine_t *gears_engine);
