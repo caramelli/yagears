@@ -1,3 +1,15 @@
+commit 69cafda9b79747a1b793eff49aba9f5b33dd17e8
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Mon Jul 10 05:23:34 2023 +0200
+
+    add build option for the constructor attribute used when registering an engine
+
+commit 7bf69e873d67f840ab66145d667f23e75da26260
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Sat Jul 8 18:34:19 2023 +0200
+
+    update ChangeLog
+
 commit b41630e13f050a60689361e670d4c22f9569d2eb
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Sat Jul 8 18:31:47 2023 +0200
