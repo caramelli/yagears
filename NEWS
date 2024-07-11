@@ -1,3 +1,7 @@
+1.2
+---
+DRI not required for EGL with DRM display
+
 1.1
 ---
 XCB support

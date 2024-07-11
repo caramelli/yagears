@@ -1,6 +1,7 @@
-AC_INIT(yagears, 1.1)
+AC_INIT(yagears, 1.2)
 
 AC_CONFIG_HEADERS(config.h)
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE
 LT_INIT
@@ -207,7 +208,7 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
         CFLAGS="$CFLAGS $WAYLAND_CFLAGS"
         save_LIBS=$LIBS
         LIBS="$LIBS $WAYLAND_LIBS"
-        AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0))], AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
         CFLAGS=$save_CFLAGS
         LIBS=$save_LIBS
       fi
@@ -220,12 +221,16 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
     if test x$enable_egl_drm = xyes; then
       PKG_CHECK_MODULES(DRM, gbm libdrm libevdev, , enable_egl_drm=no)
       if test x$enable_egl_drm = xyes; then
-        DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
-        MODVERSION=`$PKG_CONFIG --modversion dri`
-        DRIMAJORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`
-        DRI_MINOR_VERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`
-        DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"$DRIDRIVERDIR\\\" -DDRI_MAJOR_VERSION=$DRIMAJORVERSION -DDRI_MINOR_VERSION=$DRI_MINOR_VERSION"
-        DRM_LIBS="$DRM_LIBS -ldl"
+        PKG_CHECK_MODULES(DRI, dri, have_dri=yes, have_dri=no)
+        if test x$have_dri = xyes; then
+          DRIDRIVERDIR=`$PKG_CONFIG --variable=dridriverdir dri`
+          MODVERSION=`$PKG_CONFIG --modversion dri`
+          DRIMAJORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\1/'`
+          DRIMINORVERSION=`echo $MODVERSION | sed 's/\([[0-9]]*\).\([[0-9]]*\).\([[0-9]]*\)/\2/'`
+          DRM_CFLAGS="$DRM_CFLAGS -DDRI_DRIVERDIR=\\\"$DRIDRIVERDIR\\\" -DDRI_MAJOR_VERSION=$DRIMAJORVERSION -DDRI_MINOR_VERSION=$DRIMINORVERSION"
+          DRM_LIBS="$DRM_LIBS -ldl"
+          AC_DEFINE(HAVE_DRI, 1, Have Direct Rendering Infrastructure)
+        fi
       fi
     fi
 
@@ -449,4 +454,6 @@ AM_CONDITIONAL(GUI, test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable
 AM_CONDITIONAL(PNG, test x$enable_png = xyes)
 AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
 
-AC_OUTPUT(Makefile)
+AC_CONFIG_FILES(Makefile)
+
+AC_OUTPUT

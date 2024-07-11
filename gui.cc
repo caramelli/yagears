@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL demo
-  Copyright (C) 2013-2020  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -1229,6 +1229,7 @@ int main(int argc, char *argv[])
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
     #if SDL_VERSION_ATLEAST(2, 0, 0)
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, gears_engine_version(gears_engine) ? SDL_GL_CONTEXT_PROFILE_ES : 0);
     sdl_win = SDL_CreateWindow("yagears", win_posx, win_posy, win_width, win_height, SDL_WINDOW_OPENGL);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gears_engine_version(gears_engine));
     SDL_GL_CreateContext(sdl_win);
