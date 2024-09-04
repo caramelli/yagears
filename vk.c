@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2023  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -40,6 +40,7 @@
 #define VK_USE_PLATFORM_DIRECTFB_EXT
 #endif
 #if defined(VK_FBDEV)
+#include <dirent.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <linux/input.h>
@@ -56,6 +57,7 @@
 #define VK_USE_PLATFORM_XCB_KHR
 #endif
 #if defined(VK_D2D)
+#include <dirent.h>
 #include <fcntl.h>
 #include <libevdev/libevdev.h>
 #endif
@@ -552,6 +554,9 @@ int main(int argc, char *argv[])
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
   int fb_keyboard = -1;
+  DIR *fb_input_dir = NULL;
+  struct dirent *fb_input_dev = NULL;
+  unsigned char fb_key_bits[(KEY_CNT - 1) / 8 + 1];
   struct input_event fb_event;
   VkFBDevSurfaceCreateInfoEXT fb_surface_create_info;
   #endif
@@ -578,6 +583,8 @@ int main(int argc, char *argv[])
   VkDisplayPropertiesKHR *d2d_properties = NULL;
   VkDisplayModePropertiesKHR *d2d_mode_properties = NULL;
   int d2d_keyboard = -1;
+  DIR *d2d_input_dir = NULL;
+  struct dirent *d2d_input_dev = NULL;
   struct libevdev *d2d_evdev = NULL;
   struct input_event d2d_event;
   VkDisplaySurfaceCreateInfoKHR d2d_surface_create_info;
@@ -974,9 +981,40 @@ int main(int argc, char *argv[])
     fb_win->posx = win_posx;
     fb_win->posy = win_posy;
 
-    fb_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (getenv("KEYBOARD")) {
+      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+    }
+    else {
+      fb_input_dir = opendir("/dev/input");
+      if (!fb_input_dir) {
+        printf("opendir /dev/input failed: %m\n");
+        goto out;
+      }
+
+      c = alloca(64);
+
+      while ((fb_input_dev = readdir(fb_input_dir))) {
+        if (fb_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", fb_input_dev->d_name);
+          fb_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (fb_keyboard == -1)
+            continue;
+
+          err = ioctl(fb_keyboard, EVIOCGBIT(EV_KEY, sizeof(fb_key_bits)), fb_key_bits);
+          if (err == -1)
+            continue;
+
+          if (fb_key_bits[KEY_ENTER / 8] & (1 << (KEY_ENTER % 8)))
+            break;
+
+          close(fb_keyboard);
+          fb_keyboard = -1;
+        }
+      }
+    }
+
     if (fb_keyboard == -1) {
-      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      printf("open keyboard event device failed\n");
       goto out;
     }
   }
@@ -1034,15 +1072,41 @@ int main(int argc, char *argv[])
   if (!strcmp(wsi, "vk-d2d")) {
     d2d_win = d2d_mode_properties[0].parameters.visibleRegion;
 
-    d2d_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
-    if (d2d_keyboard == -1) {
-      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
-      goto out;
+    if (getenv("KEYBOARD")) {
+      d2d_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+    }
+    else {
+      d2d_input_dir = opendir("/dev/input");
+      if (!d2d_input_dir) {
+        printf("opendir /dev/input failed: %m\n");
+        goto out;
+      }
+
+      c = alloca(64);
+
+      while ((d2d_input_dev = readdir(d2d_input_dir))) {
+        if (d2d_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", d2d_input_dev->d_name);
+          d2d_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (d2d_keyboard == -1)
+            continue;
+
+          err = libevdev_new_from_fd(d2d_keyboard, &d2d_evdev);
+          if (err < 0)
+            continue;
+
+          if (libevdev_has_event_code(d2d_evdev, EV_KEY, KEY_ENTER))
+            break;
+
+          libevdev_free(d2d_evdev);
+          close(d2d_keyboard);
+          d2d_keyboard = -1;
+        }
+      }
     }
 
-    err = libevdev_new_from_fd(d2d_keyboard, &d2d_evdev);
-    if (err < 0) {
-      printf("libevdev_new_from_fd failed: %m\n");
+    if (d2d_keyboard == -1) {
+      printf("open keyboard event device failed\n");
       goto out;
     }
   }
@@ -1380,6 +1444,10 @@ out:
       close(fb_keyboard);
     }
 
+    if (fb_input_dir) {
+      closedir(fb_input_dir);
+    }
+
     if (fb_win) {
       free(fb_win);
     }
@@ -1466,7 +1534,11 @@ out:
       close(d2d_keyboard);
     }
 
-    if (!d2d_win.width || !d2d_win.height) {
+    if (d2d_input_dir) {
+      closedir(d2d_input_dir);
+    }
+
+    if (d2d_win.width || d2d_win.height) {
       memset(&d2d_win, 0, sizeof(VkExtent2D));
     }
 

@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2023  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -344,7 +344,7 @@ out:
   return -1;
 }
 
-typedef struct Uniforms {
+typedef struct {
   vec4 LightPos;
   mat4 ModelViewProjectionMatrix;
   mat4 NormalMatrix;

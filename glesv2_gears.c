@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2023  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -649,7 +649,7 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     goto out;
   }
 
-  /* destory shaders */
+  /* destroy shaders */
 
   gears->glDeleteShader(fragShader);
   gears->glDeleteShader(vertShader);

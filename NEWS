@@ -1,3 +1,8 @@
+2.8
+---
+PortableGL support
+Select the /dev/input/event corresponding to the keyboard
+
 2.7
 ---
 DRI not required for EGL with DRM display

@@ -1,5 +1,5 @@
 # yagears                  Yet Another Gears OpenGL / Vulkan demo
-# Copyright (C) 2013-2023  Nicolas Caramelli
+# Copyright (C) 2013-2024  Nicolas Caramelli
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-project('yagears', 'c', 'cpp', version: '2.7', meson_version: '>= 0.57')
+project('yagears', 'c', 'cpp', version: '2.8', meson_version: '>= 0.57')
 
 config_h = configuration_data()
 
@@ -81,12 +81,12 @@ enable_tiff = get_option('tiff')
 
 pgl_dep = []
 if with_pgl != 'false'
-  if enable_gl or enable_glesv1_cm or enable_glesv2
-    error('OpenGL 1.0, OpenGL ES 1.1 CM and OpenGL ES 2.0 engines incompatible with PortableGL')
-  endif
+  enable_gl = false
+  enable_glesv1_cm = false
+  enable_glesv2 = false
 
   if fs.is_file(with_pgl)
-    pgl_dep = declare_dependency(compile_args: ['-DPGL_H="@0@"'.format(with_pgl), get_option('pgl-cflags').split(' ')])
+    pgl_dep = declare_dependency(compile_args: ['-DPGL_H="@0@"'.format(with_pgl), get_option('pgl-cflags') != '' ? get_option('pgl-cflags').split(' ') : []])
   else
     error('PortableGL platform header not found')
   endif
@@ -97,12 +97,12 @@ if enable_gl
   gl_dep = dependency('gl', required: false)
   if gl_dep.found()
     if enable_glesv1_cm
-      gl_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GL/gl.h>', '-DGLESV1_CM_LIB="libGL.so"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
+      gl_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GL/gl.h>', '-DGLESV1_CM_LIB="libGL.so.1"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
     endif
     if enable_glesv2
       xxd = find_program('xxd', required: false)
       if xxd.found()
-        gl_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GL/gl.h>', '-DGLESV2_LIB="libGL.so"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
+        gl_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GL/gl.h>', '-DGLESV2_LIB="libGL.so.1"', '-DGL_GLEXT_PROTOTYPES'], dependencies: gl_dep)
       else
         enable_glesv2 = false
       endif
@@ -121,7 +121,7 @@ if not enable_gl
   if enable_glesv1_cm
     glesv1_cm_dep = dependency('glesv1_cm', required: false)
     if glesv1_cm_dep.found()
-      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm').stdout().strip().split(' '))
+      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm', check: true).stdout().strip().split(' '))
       glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so.1"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
     else
       enable_glesv1_cm = false
@@ -132,7 +132,7 @@ if not enable_gl
     glesv2_dep = dependency('glesv2', required: false)
     xxd = find_program('xxd', required: false)
     if glesv2_dep.found() and xxd.found()
-      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2').stdout().strip().split(' '))
+      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2', check: true).stdout().strip().split(' '))
       glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so.2"'], link_args: '-ldl', dependencies: glesv2_dep)
     else
       enable_glesv2 = false
@@ -141,16 +141,15 @@ if not enable_gl
 endif
 
 if not enable_gl and not enable_glesv1_cm and not enable_glesv2 and with_pgl == 'false'
-  error('No OpenGL Engines found')
+  warning('No OpenGL Engines found')
 endif
 
 # OpenGL Backends
 
 x11_dep = []
-directfb_dep = []
-if enable_gl or with_pgl != 'false'
+if enable_gl
   if enable_gl_x11
-    libdir = run_command('pkg-config', '--variable=libdir', 'gl').stdout().strip()
+    libdir = run_command('pkg-config', '--variable=libdir', 'gl', check: true).stdout().strip()
     if cc.has_function('glXCreateContext', dependencies: cc.find_library('GL', dirs: libdir))
       x11_dep = dependency('x11', required: false)
       if not x11_dep.found()
@@ -160,45 +159,50 @@ if enable_gl or with_pgl != 'false'
       enable_gl_x11 = false
     endif
   endif
+else
+  enable_gl_x11 = false
+endif
+config_h.set('GL_X11', enable_gl_x11, description: 'Support for GLX')
 
-  if enable_gl_directfb
-    message('Checking for DirectFBGL module')
-    moduledir = run_command('pkg-config', '--variable=moduledir', 'directfb-internal').stdout().strip()
-    if run_command('test', '-d', moduledir + '/interfaces/IDirectFBGL').returncode() == 0
-      message('DirectFBGL found')
-      directfb_dep = dependency('directfb', required: false)
-      if not directfb_dep.found()
-        enable_gl_directfb = false
-      endif
-    else
-      message('DirectFBGL not found')
+directfb_dep = []
+if enable_gl_directfb
+  message('Checking for DirectFBGL module')
+  moduledir = run_command('pkg-config', '--variable=moduledir', 'directfb-internal', check: false).stdout().strip()
+  if import('fs').is_dir(moduledir + '/interfaces/IDirectFBGL')
+    message('DirectFBGL found')
+    directfb_dep = dependency('directfb', required: false)
+    if not directfb_dep.found()
       enable_gl_directfb = false
     endif
+  else
+    message('DirectFBGL not found')
+    enable_gl_directfb = false
   endif
+endif
+config_h.set('GL_DIRECTFB', enable_gl_directfb , description: 'Support for DirectFBGL')
 
+if enable_gl
   if enable_gl_fbdev
-    libdir = run_command('pkg-config', '--variable=libdir', 'gl').stdout().strip()
+    libdir = run_command('pkg-config', '--variable=libdir', 'gl', check: true).stdout().strip()
     if not cc.has_function('glFBDevCreateContext', dependencies: cc.find_library('GL', dirs: libdir))
       enable_gl_fbdev = false
     endif
   endif
 else
-  enable_gl_x11 = false
-  enable_gl_directfb = false
   enable_gl_fbdev = false
 endif
-config_h.set('GL_X11', enable_gl_x11, description: 'Support for GLX')
-config_h.set('GL_DIRECTFB', enable_gl_directfb , description: 'Support for DirectFBGL')
 config_h.set('GL_FBDEV', enable_gl_fbdev, description: 'Support for GLFBDev')
 
-egl_dep = []
+egl_dep = dependency('', required: false)
 wayland_dep = []
 wayland_egl_dep = []
 xcb_dep = []
 drm_dep = []
 rpi_dep = []
 if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayland or enable_egl_xcb or enable_egl_drm or enable_egl_rpi
-  egl_dep = dependency('egl', required: false)
+  if with_pgl == 'false'
+    egl_dep = dependency('egl', required: false)
+  endif
   if egl_dep.found()
     egl_dep = declare_dependency(compile_args: ['-DEGL_NO_PLATFORM_SPECIFIC_TYPES', '-DEGL_EGLEXT_PROTOTYPES'], dependencies: egl_dep)
 
@@ -245,7 +249,7 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
           config_h.set('HAVE_WL_SHELL_SURFACE_SET_POSITION', false, description: 'Have function wl_shell_surface_set_position')
         endif
 
-        wayland_egl_dep = [wayland_dep, cc.find_library('wayland-egl', dirs: run_command('pkg-config', '--variable=libdir', 'wayland-client').stdout().strip())]
+        wayland_egl_dep = [wayland_dep, cc.find_library('wayland-egl', dirs: run_command('pkg-config', '--variable=libdir', 'wayland-client', check: true).stdout().strip())]
       endif
     endif
 
@@ -266,8 +270,8 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
       if enable_egl_drm
         dri_dep = dependency('dri', required: false)
         if dri_dep.found()
-          dridriverdir = run_command('pkg-config', '--variable=dridriverdir', 'dri').stdout().strip()
-          modversion = run_command('pkg-config', '--modversion', 'dri')
+          dridriverdir = run_command('pkg-config', '--variable=dridriverdir', 'dri', check: true).stdout().strip()
+          modversion = run_command('pkg-config', '--modversion', 'dri', check: true)
           drimajorversion = modversion.stdout().split('.')[0]
           driminorversion = modversion.stdout().split('.')[1]
           drm_dep = declare_dependency(compile_args: ['-DDRI_DRIVERDIR="@0@"'.format(dridriverdir), '-DDRI_MAJOR_VERSION=@0@'.format(drimajorversion), '-DDRI_MINOR_VERSION=@0@'.format(driminorversion)], link_args: '-ldl', dependencies: drm_dep)
@@ -279,7 +283,7 @@ if enable_egl_x11 or enable_egl_directfb or enable_egl_fbdev or enable_egl_wayla
     if enable_egl_rpi
       rpi_dep = dependency('bcm_host', required: false)
       if rpi_dep.found()
-        rpi_dep = [rpi_dep, cc.find_library('vchostif', dirs: run_command('pkg-config', '--variable=libdir', 'bcm_host').stdout().strip())]
+        rpi_dep = [rpi_dep, cc.find_library('vchostif', dirs: run_command('pkg-config', '--variable=libdir', 'bcm_host', check: true).stdout().strip())]
       else
         enable_egl_rpi = false
       endif
@@ -303,18 +307,20 @@ config_h.set('EGL_DRM', enable_egl_drm, description: 'Support for EGL with DRM p
 config_h.set('EGL_RPI', enable_egl_rpi, description: 'Support for EGL with Raspberry Pi Dispmanx platform')
 
 waffle_dep = []
-if enable_waffle
+if enable_waffle and with_pgl == 'false'
   waffle_dep = [dependency('libinput', required: false), dependency('waffle-1', required: false)]
   foreach dep : waffle_dep
     if not dep.found()
       enable_waffle = false
     endif
   endforeach
+else
+  enable_waffle = false
 endif
 config_h.set('WAFFLE', enable_waffle, description: 'Support for Waffle cross-platform wrapper')
 
 if not enable_gl_x11 and not enable_gl_directfb and not enable_gl_fbdev and not enable_egl_x11 and not enable_egl_directfb and not enable_egl_fbdev and not enable_egl_wayland and not enable_egl_xcb and not enable_egl_drm and not enable_egl_rpi and not enable_waffle
-  error('No OpenGL Backends found')
+  warning('No OpenGL Backends found')
 endif
 
 # Vulkan WSIs
@@ -325,7 +331,7 @@ if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland o
   vulkan_dep = dependency('vulkan', required: false)
   glslang_validator = find_program('glslangValidator', required: false)
   if vulkan_dep.found() and glslang_validator.found()
-    libdir = run_command('pkg-config', '--variable=libdir', 'vulkan').stdout().strip()
+    libdir = run_command('pkg-config', '--variable=libdir', 'vulkan', check: true).stdout().strip()
 
     if enable_vk_x11
       if cc.has_function('vkCreateXlibSurfaceKHR', dependencies: cc.find_library('vulkan', dirs: libdir))
@@ -437,6 +443,21 @@ endif
 
 # Graphical User Interface Toolkits
 
+if not enable_gl and not enable_glesv1_cm and not enable_glesv2
+  enable_glut = false
+endif
+
+if with_pgl != 'false' and not enable_vk_x11 and not enable_vk_directfb and not enable_vk_fbdev and not enable_vk_wayland and not enable_vk_xcb and not enable_vk_d2d
+  enable_efl = false
+  enable_fltk = false
+  enable_glfw = false
+  enable_gtk = false
+  enable_qt = false
+  enable_sdl = false
+  enable_sfml = false
+  enable_wx = false
+endif
+
 efl_dep = []
 if enable_efl
   efl_dep = dependency('elementary', required: false)
@@ -450,7 +471,7 @@ fltk_dep = []
 if enable_fltk
   fltk_config = find_program('fltk-config', required: false)
   if fltk_config.found()
-    fltk_dep = declare_dependency(compile_args: run_command(fltk_config, '--cflags').stdout().strip().split(' '), link_args: run_command(fltk_config, '--use-gl', '--ldflags').stdout().strip().split(' '))
+    fltk_dep = declare_dependency(compile_args: run_command(fltk_config, '--cflags', check: true).stdout().strip().split(' '), link_args: run_command(fltk_config, '--use-gl', '--ldflags', check: true).stdout().strip().split(' '))
   else
     enable_fltk = false
   endif
@@ -539,6 +560,7 @@ if enable_sdl
     sdl_dep = dependency('sdl2', required: false)
     if not sdl_dep.found()
       enable_sdl = false
+      with_sdl = '1'
     endif
   else
     enable_sdl = false
@@ -567,7 +589,7 @@ wx_dep = []
 if enable_wx
   wx_config = find_program('wx-config', required: false)
   if wx_config.found()
-    wx_dep = declare_dependency(compile_args: run_command(wx_config, '--cflags').stdout().strip().split(' '), link_args: run_command(wx_config, '--libs', 'core,gl').stdout().strip().split(' '))
+    wx_dep = declare_dependency(compile_args: run_command(wx_config, '--cflags', check: true).stdout().strip().split(' '), link_args: run_command(wx_config, '--libs', 'core,gl', check: true).stdout().strip().split(' '))
   else
     enable_wx = false
   endif
@@ -615,13 +637,13 @@ message('')
 message('  OpenGL extension for Xlib         @0@'.format(enable_gl_x11))
 message('  OpenGL extension for DirectFB     @0@'.format(enable_gl_directfb))
 message('  OpenGL extension for Linux FBDev  @0@'.format(enable_gl_fbdev))
-message('     EGL interface for Xlib         @0@'.format(enable_egl_x11))
-message('     EGL interface for DirectFB     @0@'.format(enable_egl_directfb))
-message('     EGL interface for Linux FBDev  @0@'.format(enable_egl_fbdev))
-message('     EGL interface for Wayland      @0@'.format(enable_egl_wayland))
-message('     EGL interface for XCB          @0@'.format(enable_egl_xcb))
-message('     EGL interface for DRM          @0@'.format(enable_egl_drm))
-message('     EGL interface for RPi Dispmanx @0@'.format(enable_egl_rpi))
+message('  EGL    interface for Xlib         @0@'.format(enable_egl_x11))
+message('  EGL    interface for DirectFB     @0@'.format(enable_egl_directfb))
+message('  EGL    interface for Linux FBDev  @0@'.format(enable_egl_fbdev))
+message('  EGL    interface for Wayland      @0@'.format(enable_egl_wayland))
+message('  EGL    interface for XCB          @0@'.format(enable_egl_xcb))
+message('  EGL    interface for DRM          @0@'.format(enable_egl_drm))
+message('  EGL    interface for RPi Dispmanx @0@'.format(enable_egl_rpi))
 message('  Waffle cross-platform wrapper     @0@'.format(enable_waffle))
 message('')
 
@@ -652,10 +674,18 @@ message('')
 
 # Build rules
 
-GL = enable_gl
-GLESV1_CM = enable_glesv1_cm
-GLESV2 = enable_glesv2
-PGL = with_pgl != 'false'
+PNG = enable_png
+TIFF = enable_tiff
+
+if enable_gl or enable_glesv1_cm or enable_glesv2 or with_pgl != 'false'
+  GL = enable_gl
+  GLESV1_CM = enable_glesv1_cm
+  GLESV2 = enable_glesv2
+  PGL = with_pgl != 'false'
+  OPENGL = true
+else
+  OPENGL = false
+endif
 
 if enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d
   VK = true
@@ -665,21 +695,29 @@ endif
 
 MOSAIC = enable_glut
 
-if enable_efl or enable_fltk or enable_glfw or enable_glut or enable_gtk or enable_qt or enable_sdl or enable_sfml or enable_wx
+if (enable_gl or enable_glesv1_cm or enable_glesv2) and (enable_efl or enable_fltk or enable_glfw or enable_glut or enable_gtk or enable_qt or enable_sdl or enable_sfml or enable_wx)
   GUI = true
 else
   GUI = false
 endif
 
-if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d) and (enable_glfw or enable_sdl)
+if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d) and (enable_glfw or (enable_sdl and with_sdl == '2'))
   VK_GUI = true
 else
   VK_GUI = false
 endif
 
-PNG = enable_png
-TIFF = enable_tiff
+png_source = []
+if PNG
+png_source = 'png_image.c'
+endif
 
+tiff_source = []
+if TIFF
+tiff_source = 'tiff_image.c'
+endif
+
+if OPENGL
 gl_source = []
 if GL
 gl_source = 'gl_gears.c'
@@ -705,16 +743,6 @@ if PGL
 pgl_source = 'pgl_gears.c'
 endif
 
-png_source = []
-if PNG
-png_source = 'png_image.c'
-endif
-
-tiff_source = []
-if TIFF
-tiff_source = 'tiff_image.c'
-endif
-
 libyagears = static_library('yagears',
                             'gears_engine.c', gl_source, glesv1_cm_source, glesv2_source, vert_xxd_file, frag_xxd_file, pgl_source, 'image_loader.c', png_source, tiff_source,
                             dependencies: [gl_dep, glesv1_cm_dep, glesv2_dep, pgl_dep, png_dep, tiff_dep])
@@ -724,6 +752,7 @@ executable('yagears2',
            dependencies: [waffle_dep, egl_dep, x11_dep, directfb_dep, wayland_egl_dep, xcb_dep, drm_dep, rpi_dep],
            link_whole: libyagears,
            install: true)
+endif
 
 if VK
 vert_spv_file = custom_target('vert_spv', command: [glslang_validator, '@INPUT@', '-V', '-x'], input: 'vulkan_gears.vert', output: 'vert.spv')
@@ -753,7 +782,7 @@ endif
 
 if VK_GUI
 executable('yagears2-vk-gui',
-           'vk-gui.cc', 'vulkan_gears.c', 'image_loader.c', png_source, tiff_source,
+           'vk-gui.cc', 'vulkan_gears.c', vert_spv_file, frag_spv_file, 'image_loader.c', png_source, tiff_source,
            dependencies: [vulkan_dep, png_dep, tiff_dep, glfw_dep, sdl_dep],
            install: true)
 endif

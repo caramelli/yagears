@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2023  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -38,6 +38,10 @@
 #include <directfbgl.h>
 #endif
 #if defined(GL_FBDEV)
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <sys/mman.h>
 #include <GL/glfbdev.h>
 #endif
 
@@ -48,6 +52,7 @@
 #include <directfb.h>
 #endif
 #if defined(EGL_FBDEV)
+#include <dirent.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <linux/input.h>
@@ -61,6 +66,7 @@
 #include <xcb/xcb.h>
 #endif
 #if defined(EGL_DRM)
+#include <dirent.h>
 #include <fcntl.h>
 #include <gbm.h>
 #include <libevdev/libevdev.h>
@@ -915,6 +921,9 @@ int main(int argc, char *argv[])
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
   int fb_keyboard = -1;
+  DIR *fb_input_dir = NULL;
+  struct dirent *fb_input_dev = NULL;
+  unsigned char fb_key_bits[(KEY_CNT - 1) / 8 + 1];
   struct input_event fb_event;
   #endif
   #if defined(GL_FBDEV)
@@ -957,6 +966,8 @@ int main(int argc, char *argv[])
   uint32_t drm_fb_id = 0;
   drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
   int drm_keyboard = -1;
+  DIR *drm_input_dir = NULL;
+  struct dirent *drm_input_dev = NULL;
   struct libevdev *drm_evdev = NULL;
   struct input_event drm_event;
   #endif
@@ -1469,7 +1480,7 @@ int main(int argc, char *argv[])
 
   if (!strcmp(backend, "egl-x11") || !strcmp(backend, "egl-directfb") || !strcmp(backend, "egl-fbdev") || !strcmp(backend, "egl-wayland") || !strcmp(backend, "egl-xcb") || !strcmp(backend, "egl-drm")) {
     egl_extensions = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-    if (egl_extensions && strstr(egl_extensions, egl_extension_name) && !getenv("NO_EGL_EXT_platform_base")) {
+    if (!getenv("NO_EGL_EXT_PLATFORM") && egl_extensions && strstr(egl_extensions, egl_extension_name)) {
       eglGetPlatformDisplayEXT = (PFNEGLGETPLATFORMDISPLAYEXTPROC)eglGetProcAddress("eglGetPlatformDisplayEXT");
       eglCreatePlatformWindowSurfaceEXT = (PFNEGLCREATEPLATFORMWINDOWSURFACEEXTPROC)eglGetProcAddress("eglCreatePlatformWindowSurfaceEXT");
     }
@@ -1645,8 +1656,6 @@ int main(int argc, char *argv[])
     egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_BLUE_SIZE;
     egl_config_attr[opt++] = 1;
-    egl_config_attr[opt++] = EGL_ALPHA_SIZE;
-    egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_DEPTH_SIZE;
     egl_config_attr[opt++] = 1;
     egl_config_attr[opt++] = EGL_RENDERABLE_TYPE;
@@ -1721,6 +1730,9 @@ int main(int argc, char *argv[])
     memset(&dfb_desc, 0, sizeof(DFBWindowDescription));
     dfb_desc.flags = DWDESC_SURFACE_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY;
     dfb_desc.surface_caps = dfb_attr;
+    if (getenv("DSCAPS_GL")) {
+      dfb_desc.surface_caps |= DSCAPS_GL;
+    }
     dfb_desc.width = win_width;
     dfb_desc.height = win_height;
     dfb_desc.posx = win_posx;
@@ -1776,9 +1788,40 @@ int main(int argc, char *argv[])
     fb_win->posx = win_posx;
     fb_win->posy = win_posy;
 
-    fb_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (getenv("KEYBOARD")) {
+      fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+    }
+    else {
+      fb_input_dir = opendir("/dev/input");
+      if (!fb_input_dir) {
+        printf("opendir /dev/input failed: %m\n");
+        goto out;
+      }
+
+      c = alloca(64);
+
+      while ((fb_input_dev = readdir(fb_input_dir))) {
+        if (fb_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", fb_input_dev->d_name);
+          fb_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (fb_keyboard == -1)
+            continue;
+
+          err = ioctl(fb_keyboard, EVIOCGBIT(EV_KEY, sizeof(fb_key_bits)), fb_key_bits);
+          if (err == -1)
+            continue;
+
+          if (fb_key_bits[KEY_ENTER / 8] & (1 << (KEY_ENTER % 8)))
+            break;
+
+          close(fb_keyboard);
+          fb_keyboard = -1;
+        }
+      }
+    }
+
     if (fb_keyboard == -1) {
-      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
+      printf("open keyboard event device failed\n");
       goto out;
     }
   }
@@ -1875,15 +1918,41 @@ int main(int argc, char *argv[])
       }
     }
 
-    drm_keyboard = open(getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0", O_RDONLY | O_NONBLOCK);
-    if (drm_keyboard == -1) {
-      printf("open %s failed: %m\n", getenv("KEYBOARD") ? getenv("KEYBOARD") : "/dev/input/event0");
-      goto out;
+    if (getenv("KEYBOARD")) {
+      drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
+    }
+    else {
+      drm_input_dir = opendir("/dev/input");
+      if (!drm_input_dir) {
+        printf("opendir /dev/input failed: %m\n");
+        goto out;
+      }
+
+      c = alloca(64);
+
+      while ((drm_input_dev = readdir(drm_input_dir))) {
+        if (drm_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", drm_input_dev->d_name);
+          drm_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (drm_keyboard == -1)
+            continue;
+
+          err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
+          if (err < 0)
+            continue;
+
+          if (libevdev_has_event_code(drm_evdev, EV_KEY, KEY_ENTER))
+            break;
+
+          libevdev_free(drm_evdev);
+          close(drm_keyboard);
+          drm_keyboard = -1;
+        }
+      }
     }
 
-    err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
-    if (err < 0) {
-      printf("libevdev_new_from_fd failed: %m\n");
+    if (drm_keyboard == -1) {
+      printf("open keyboard event device failed\n");
       goto out;
     }
   }
@@ -2030,7 +2099,6 @@ int main(int argc, char *argv[])
   #endif
   #if defined(EGL_DRM)
   if (!strcmp(backend, "egl-drm")) {
-    egl_win = eglCreateWindowSurface(egl_dpy, egl_config, (EGLNativeWindowType)drm_win, NULL);
     #if defined(EGL_EXT_platform_base) && defined(EGL_PLATFORM_GBM_KHR)
     if (eglCreatePlatformWindowSurfaceEXT) {
       egl_win = eglCreatePlatformWindowSurfaceEXT(egl_dpy, egl_config, drm_win, NULL);
@@ -2098,6 +2166,10 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb")) {
+    c = alloca(2);
+    sprintf(c, "%d", gears_engine_version(gears_engine));
+    DirectFBSetOption("gles", c);
+
     err = dfb_win->GetGL(dfb_win, &dfb_ctx);
     if (err) {
       printf("GetGL failed: %s\n", DirectFBErrorString(err));
@@ -2227,7 +2299,12 @@ int main(int argc, char *argv[])
       #endif
       #if defined(GL_DIRECTFB)
       if (!strcmp(backend, "gl-directfb")) {
-        dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        if (getenv("DSCAPS_GL")) {
+          dfb_ctx->SwapBuffers(dfb_ctx);
+        }
+        else {
+          dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        }
       }
       #endif
       #if defined(GL_FBDEV)
@@ -2269,8 +2346,13 @@ int main(int argc, char *argv[])
     #endif
     #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
     if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-      if (!animate && redisplay) {
-        redisplay = 0;
+      if (redisplay) {
+        if (getenv("DSCAPS_GL")) {
+          dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        }
+        if (!animate) {
+          redisplay = 0;
+        }
       }
 
       memset(&dfb_event, 0, sizeof(DFBWindowEvent));
@@ -2621,6 +2703,10 @@ out:
       close(fb_keyboard);
     }
 
+    if (fb_input_dir) {
+      closedir(fb_input_dir);
+    }
+
     if (fb_win) {
       free(fb_win);
     }
@@ -2714,6 +2800,10 @@ out:
 
     if (drm_keyboard != -1) {
       close(drm_keyboard);
+    }
+
+    if (drm_input_dir) {
+      closedir(drm_input_dir);
     }
 
     if (drm_win) {

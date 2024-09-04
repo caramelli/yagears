@@ -1,5 +1,5 @@
 # yagears                  Yet Another Gears OpenGL / Vulkan demo
-# Copyright (C) 2013-2023  Nicolas Caramelli
+# Copyright (C) 2013-2024  Nicolas Caramelli
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -19,9 +19,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-AC_INIT(yagears, 2.7)
+AC_INIT(yagears, 2.8)
 
 AC_CONFIG_HEADERS(config.h)
+AC_CONFIG_MACRO_DIR([m4])
 
 AM_INIT_AUTOMAKE
 LT_INIT
@@ -159,9 +160,9 @@ AC_ARG_ENABLE(tiff,
 # OpenGL Engines
 
 if test x$with_pgl != xno; then
-  if test x$enable_gl = xyes -o x$enable_glesv1_cm = xyes -o x$enable_glesv2 = xyes; then
-    AC_MSG_ERROR([OpenGL 1.0, OpenGL ES 1.1 CM and OpenGL ES 2.0 engines incompatible with PortableGL])
-  fi
+  enable_gl=no
+  enable_glesv1_cm=no
+  enable_glesv2=no
 
   if test -f $with_pgl; then
     PGL_CFLAGS="-DPGL_H=\\\"$with_pgl\\\" $with_pgl_cflags"
@@ -175,12 +176,12 @@ if test x$enable_gl = xyes; then
   PKG_CHECK_MODULES(GL, gl, , enable_gl=no)
   if test x$enable_gl = xyes; then
     if test x$enable_glesv1_cm = xyes; then
-      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\> -DGLESV1_CM_LIB=\\\"libGL.so\\\" -DGL_GLEXT_PROTOTYPES"
+      GL_CFLAGS="$GL_CFLAGS -DGLESV1_CM_H=\<GL/gl.h\> -DGLESV1_CM_LIB=\\\"libGL.so.1\\\" -DGL_GLEXT_PROTOTYPES"
     fi
     if test x$enable_glesv2 = xyes; then
       AC_PATH_TOOL(XXD, xxd)
       if test -n "$XXD"; then
-        GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGLESV2_LIB=\\\"libGL.so\\\" -DGL_GLEXT_PROTOTYPES"
+        GL_CFLAGS="$GL_CFLAGS -DGLESV2_H=\<GL/gl.h\> -DGLESV2_LIB=\\\"libGL.so.1\\\" -DGL_GLEXT_PROTOTYPES"
       else
         enable_glesv2=no
       fi
@@ -215,12 +216,12 @@ if test x$enable_gl = xno; then
 fi
 
 if test x$enable_gl = xno -a x$enable_glesv1_cm = xno -a x$enable_glesv2 = xno -a x$with_pgl = xno; then
-  AC_MSG_ERROR(No OpenGL Engines found)
+  AC_MSG_WARN(No OpenGL Engines found)
 fi
 
 # OpenGL Backends
 
-if test x$enable_gl = xyes -o x$with_pgl != xno; then
+if test x$enable_gl = xyes; then
   if test x$enable_gl_x11 = xyes; then
     save_LIBS=$LIBS
     LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
@@ -230,19 +231,29 @@ if test x$enable_gl = xyes -o x$with_pgl != xno; then
       PKG_CHECK_MODULES(X11, x11, , enable_gl_x11=no)
     fi
   fi
+else
+  enable_gl_x11=no
+fi
+if test x$enable_gl_x11 = xyes; then
+  AC_DEFINE(GL_X11, , Support for GLX)
+fi
 
-  if test x$enable_gl_directfb = xyes; then
-    AC_MSG_CHECKING(for DirectFBGL module)
-    MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal 2> /dev/null`
-    if test -d $MODULEDIR/interfaces/IDirectFBGL; then
-      AC_MSG_RESULT(yes)
-      PKG_CHECK_MODULES(DIRECTFB, directfb, , enable_gl_directfb=no)
-    else
-      AC_MSG_RESULT(no)
-      enable_gl_directfb=no
-    fi
+if test x$enable_gl_directfb = xyes; then
+  AC_MSG_CHECKING(for DirectFBGL module)
+  MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal 2> /dev/null`
+  if test -d $MODULEDIR/interfaces/IDirectFBGL; then
+    AC_MSG_RESULT(yes)
+    PKG_CHECK_MODULES(DIRECTFB, directfb, , enable_gl_directfb=no)
+  else
+    AC_MSG_RESULT(no)
+    enable_gl_directfb=no
   fi
+fi
+if test x$enable_gl_directfb = xyes; then
+  AC_DEFINE(GL_DIRECTFB, , Support for DirectFBGL)
+fi
 
+if test x$enable_gl = xyes; then
   if test x$enable_gl_fbdev = xyes; then
     save_LIBS=$LIBS
     LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
@@ -250,23 +261,17 @@ if test x$enable_gl = xyes -o x$with_pgl != xno; then
     LIBS=$save_LIBS
   fi
 else
-  enable_gl_x11=no
-  enable_gl_directfb=no
   enable_gl_fbdev=no
-fi
-if test x$enable_gl_x11 = xyes; then
-  AC_DEFINE(GL_X11, , Support for GLX)
-fi
-if test x$enable_gl_directfb = xyes; then
-  AC_DEFINE(GL_DIRECTFB, , Support for DirectFBGL)
 fi
 if test x$enable_gl_fbdev = xyes; then
   AC_DEFINE(GL_FBDEV, , Support for GLFBDev)
 fi
 
 if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_fbdev = xyes -o x$enable_egl_wayland = xyes -o x$enable_egl_xcb = xyes -o x$enable_egl_drm -o x$enable_egl_rpi; then
-  PKG_CHECK_MODULES(EGL, egl, enable_egl=yes, enable_egl=no)
-  if test x$enable_egl = xyes; then
+  if test x$with_pgl = xno; then
+    PKG_CHECK_MODULES(EGL, egl, have_egl=yes, have_egl=no)
+  fi
+  if test x$have_egl = xyes; then
     EGL_CFLAGS="$EGL_CFLAGS -DEGL_NO_PLATFORM_SPECIFIC_TYPES -DEGL_EGLEXT_PROTOTYPES"
 
     if test x$enable_egl_x11 = xyes; then
@@ -289,7 +294,7 @@ if test x$enable_egl_x11 = xyes -o x$enable_egl_directfb = xyes -o x$enable_egl_
         CFLAGS="$CFLAGS $WAYLAND_CFLAGS"
         save_LIBS=$LIBS
         LIBS="$LIBS $WAYLAND_LIBS"
-        AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0))], AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
         CFLAGS=$save_CFLAGS
         LIBS=$save_LIBS
 
@@ -358,7 +363,7 @@ if test x$enable_egl_rpi = xyes; then
   AC_DEFINE(EGL_RPI, , Support for EGL with Raspberry Pi Dispmanx platform)
 fi
 
-if test x$enable_waffle = xyes; then
+if test x$enable_waffle = xyes && test x$with_pgl = xno; then
   PKG_CHECK_MODULES(WAFFLE, libinput waffle-1, , enable_waffle=no)
 else
   enable_waffle=no
@@ -368,7 +373,7 @@ if test x$enable_waffle = xyes; then
 fi
 
 if test x$enable_gl_x11 = xno -a x$enable_gl_directfb = xno -a x$enable_gl_fbdev = xno -a x$enable_egl_x11 = xno -a x$enable_egl_directfb = xno -a x$enable_egl_fbdev = xno -a x$enable_egl_wayland = xno -a x$enable_egl_xcb = xno -a x$enable_egl_drm = xno -a x$enable_egl_rpi = xno -a x$enable_waffle = xno; then
-  AC_MSG_ERROR(No OpenGL Backends found)
+  AC_MSG_WARN(No OpenGL Backends found)
 fi
 
 # Vulkan WSIs
@@ -412,7 +417,7 @@ if test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbd
             save_CFLAGS=$CFLAGS
             CFLAGS="$CFLAGS $WAYLAND_CFLAGS"
             LIBS="$save_LIBS $WAYLAND_LIBS"
-            AC_TRY_LINK([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0), AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
+            AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <wayland-client.h>], wl_shell_surface_set_position(NULL, 0, 0))], AC_DEFINE(HAVE_WL_SHELL_SURFACE_SET_POSITION, 1, Have function wl_shell_surface_set_position) AC_MSG_RESULT(yes), AC_MSG_RESULT(no))
             CFLAGS=$save_CFLAGS
             LIBS="$save_LIBS `$PKG_CONFIG --libs-only-L vulkan`"
           fi
@@ -470,6 +475,21 @@ if test x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev
 fi
 
 # Graphical User Interface Toolkits
+
+if test x$enable_gl = xno -a x$enable_glesv1_cm = xno -a x$enable_glesv2 = xno; then
+  enable_glut=no
+fi
+
+if test x$with_pgl != xno -a x$enable_vk_x11 = xno -a x$enable_vk_directfb = xno -a x$enable_vk_fbdev = xno -a x$enable_vk_wayland = xno -a x$enable_vk_xcb = xno -a x$enable_vk_d2d = xno; then
+  enable_efl=no
+  enable_fltk=no
+  enable_glfw=no
+  enable_gtk=no
+  enable_qt=no
+  enable_sdl=no
+  enable_sfml=no
+  enable_wx=no
+fi
 
 if test x$enable_efl = xyes; then
   PKG_CHECK_MODULES(EFL, elementary, , enable_efl=no)
@@ -555,6 +575,9 @@ if test x$enable_sdl = xyes; then
   AC_MSG_RESULT([$with_sdl])
   if test x$with_sdl = x2; then
     PKG_CHECK_MODULES(SDL, sdl2, , enable_sdl=no)
+    if test x$enable_sdl = xno; then
+      with_sdl=1
+    fi
   else
     enable_sdl=no
   fi
@@ -619,13 +642,13 @@ echo
 echo "  OpenGL extension for Xlib         $enable_gl_x11"
 echo "  OpenGL extension for DirectFB     $enable_gl_directfb"
 echo "  OpenGL extension for Linux FBDev  $enable_gl_fbdev"
-echo "     EGL interface for Xlib         $enable_egl_x11"
-echo "     EGL interface for DirectFB     $enable_egl_directfb"
-echo "     EGL interface for Linux FBDev  $enable_egl_fbdev"
-echo "     EGL interface for Wayland      $enable_egl_wayland"
-echo "     EGL interface for XCB          $enable_egl_xcb"
-echo "     EGL interface for DRM          $enable_egl_drm"
-echo "     EGL interface for RPi Dispmanx $enable_egl_rpi"
+echo "  EGL    interface for Xlib         $enable_egl_x11"
+echo "  EGL    interface for DirectFB     $enable_egl_directfb"
+echo "  EGL    interface for Linux FBDev  $enable_egl_fbdev"
+echo "  EGL    interface for Wayland      $enable_egl_wayland"
+echo "  EGL    interface for XCB          $enable_egl_xcb"
+echo "  EGL    interface for DRM          $enable_egl_drm"
+echo "  EGL    interface for RPi Dispmanx $enable_egl_rpi"
 echo "  Waffle cross-platform wrapper     $enable_waffle"
 echo
 
@@ -656,20 +679,23 @@ echo
 
 # Build rules
 
+AM_CONDITIONAL(PNG, test x$enable_png = xyes)
+AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
+
 AM_CONDITIONAL(GL, test x$enable_gl = xyes)
 AM_CONDITIONAL(GLESV1_CM, test x$enable_glesv1_cm = xyes)
 AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
 AM_CONDITIONAL(PGL, test x$with_pgl != xno)
+AM_CONDITIONAL(OPENGL, test x$enable_gl = xyes -o x$enable_glesv1_cm = xyes -o x$enable_glesv2 = xyes -o x$with_pgl != xno)
 
 AM_CONDITIONAL(VK, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes)
 
 AM_CONDITIONAL(MOSAIC, test x$enable_glut = xyes)
 
-AM_CONDITIONAL(GUI, test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable_glfw = xyes -o x$enable_glut = xyes -o x$enable_gtk = xyes -o x$enable_qt = xyes -o x$enable_sdl = xyes -o x$enable_sfml = xyes -o x$enable_wx = xyes)
+AM_CONDITIONAL(GUI, test x$enable_gl = xyes -o x$enable_glesv1_cm = xyes -o x$enable_glesv2 = xyes && test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable_glfw = xyes -o x$enable_glut = xyes -o x$enable_gtk = xyes -o x$enable_qt = xyes -o x$enable_sdl = xyes -o x$enable_sfml = xyes -o x$enable_wx = xyes)
 
-AM_CONDITIONAL(VK_GUI, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes && test x$enable_glfw = xyes -o x$enable_sdl = xyes)
+AM_CONDITIONAL(VK_GUI, test x$enable_vk_x11 = xyes -o x$enable_vk_directfb = xyes -o x$enable_vk_fbdev = xyes -o x$enable_vk_wayland = xyes -o x$enable_vk_xcb = xyes -o x$enable_vk_d2d = xyes && test x$enable_glfw = xyes -o x$enable_sdl = xyes -a x$with_sdl = x2)
 
-AM_CONDITIONAL(PNG, test x$enable_png = xyes)
-AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
+AC_CONFIG_FILES(Makefile)
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT

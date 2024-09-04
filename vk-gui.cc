@@ -1,6 +1,6 @@
 /*
   yagears                  Yet Another Gears OpenGL / Vulkan demo
-  Copyright (C) 2013-2023  Nicolas Caramelli
+  Copyright (C) 2013-2024  Nicolas Caramelli
 
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files (the "Software"), to deal
@@ -37,7 +37,9 @@
 #endif
 #if defined(SDL)
 #include <SDL.h>
+#if SDL_MAJOR_VERSION >= 2
 #include <SDL_vulkan.h>
+#endif
 #endif
 
 #include "vulkan_gears.h"
@@ -165,7 +167,7 @@ static void glfwKeyCallback(GLFWwindow *window, int key, int scancode, int actio
 }
 #endif
 
-#if defined(SDL)
+#if SDL_MAJOR_VERSION >= 2
 static void SDL_Display(SDL_Window *window)
 {
   if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
@@ -257,7 +259,7 @@ int main(int argc, char *argv[])
   #if defined(GLFW)
   GLFWwindow *glfw_win;
   #endif
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   SDL_Window *sdl_win;
   int sdl_idle_id;
   #endif
@@ -279,7 +281,7 @@ int main(int argc, char *argv[])
   #if defined(GLFW)
   strcat(toolkits, "glfw ");
   #endif
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   strcat(toolkits, "sdl ");
   #endif
 
@@ -326,7 +328,7 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -364,7 +366,7 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     sdl_win = SDL_CreateWindow("yagears", win_posx, win_posy, win_width, win_height, SDL_WINDOW_VULKAN);
     sdl_idle_id = 1;
@@ -379,7 +381,7 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     SDL_Vulkan_GetInstanceExtensions(sdl_win, &vk_extension_count, NULL);
     vk_extension_names = (const char **)calloc(vk_extension_count, sizeof(const char *));
@@ -420,7 +422,7 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     SDL_Vulkan_CreateSurface(sdl_win, vk_instance, &vk_surface);
   }
@@ -483,7 +485,7 @@ int main(int argc, char *argv[])
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     SDL_Display(sdl_win);
     while (1) {
@@ -542,7 +544,7 @@ out:
   }
   #endif
 
-  #if defined(SDL)
+  #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     free(vk_extension_names);
     SDL_DestroyWindow(sdl_win);
