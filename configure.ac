@@ -1,4 +1,25 @@
-AC_INIT(yagears, 1.2)
+# yagears                  Yet Another Gears OpenGL demo
+# Copyright (C) 2013-2024  Nicolas Caramelli
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+AC_INIT(yagears, 1.3)
 
 AC_CONFIG_HEADERS(config.h)
 AC_CONFIG_MACRO_DIR([m4])
@@ -149,19 +170,29 @@ if test x$enable_gl = xyes; then
       PKG_CHECK_MODULES(X11, x11, , enable_gl_x11=no)
     fi
   fi
+else
+  enable_gl_x11=no
+fi
+if test x$enable_gl_x11 = xyes; then
+  AC_DEFINE(GL_X11, , Support for GLX)
+fi
 
-  if test x$enable_gl_directfb = xyes; then
-    AC_MSG_CHECKING(for DirectFBGL module)
-    MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal 2> /dev/null`
-    if test -d $MODULEDIR/interfaces/IDirectFBGL; then
-      AC_MSG_RESULT(yes)
-      PKG_CHECK_MODULES(DIRECTFB, directfb, , enable_gl_directfb=no)
-    else
-      AC_MSG_RESULT(no)
-      enable_gl_directfb=no
-    fi
+if test x$enable_gl_directfb = xyes; then
+  AC_MSG_CHECKING(for DirectFBGL module)
+  MODULEDIR=`$PKG_CONFIG --variable=moduledir directfb-internal 2> /dev/null`
+  if test -d $MODULEDIR/interfaces/IDirectFBGL; then
+    AC_MSG_RESULT(yes)
+    PKG_CHECK_MODULES(DIRECTFB, directfb, , enable_gl_directfb=no)
+  else
+    AC_MSG_RESULT(no)
+    enable_gl_directfb=no
   fi
+fi
+if test x$enable_gl_directfb = xyes; then
+  AC_DEFINE(GL_DIRECTFB, , Support for DirectFBGL)
+fi
 
+if test x$enable_gl = xyes; then
   if test x$enable_gl_fbdev = xyes; then
     save_LIBS=$LIBS
     LIBS="$LIBS `$PKG_CONFIG --libs-only-L gl`"
@@ -169,15 +200,7 @@ if test x$enable_gl = xyes; then
     LIBS=$save_LIBS
   fi
 else
-  enable_gl_x11=no
-  enable_gl_directfb=no
   enable_gl_fbdev=no
-fi
-if test x$enable_gl_x11 = xyes; then
-  AC_DEFINE(GL_X11, , Support for GLX)
-fi
-if test x$enable_gl_directfb = xyes; then
-  AC_DEFINE(GL_DIRECTFB, , Support for DirectFBGL)
 fi
 if test x$enable_gl_fbdev = xyes; then
   AC_DEFINE(GL_FBDEV, , Support for GLFBDev)
@@ -418,13 +441,13 @@ echo
 echo "  OpenGL extension for Xlib         $enable_gl_x11"
 echo "  OpenGL extension for DirectFB     $enable_gl_directfb"
 echo "  OpenGL extension for Linux FBDev  $enable_gl_fbdev"
-echo "     EGL interface for Xlib         $enable_egl_x11"
-echo "     EGL interface for DirectFB     $enable_egl_directfb"
-echo "     EGL interface for Linux FBDev  $enable_egl_fbdev"
-echo "     EGL interface for Wayland      $enable_egl_wayland"
-echo "     EGL interface for XCB          $enable_egl_xcb"
-echo "     EGL interface for DRM          $enable_egl_drm"
-echo "     EGL interface for RPi Dispmanx $enable_egl_rpi"
+echo "  EGL    interface for Xlib         $enable_egl_x11"
+echo "  EGL    interface for DirectFB     $enable_egl_directfb"
+echo "  EGL    interface for Linux FBDev  $enable_egl_fbdev"
+echo "  EGL    interface for Wayland      $enable_egl_wayland"
+echo "  EGL    interface for XCB          $enable_egl_xcb"
+echo "  EGL    interface for DRM          $enable_egl_drm"
+echo "  EGL    interface for RPi Dispmanx $enable_egl_rpi"
 echo
 
 echo
@@ -443,6 +466,9 @@ echo
 
 # Build rules
 
+AM_CONDITIONAL(PNG, test x$enable_png = xyes)
+AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
+
 AM_CONDITIONAL(GL, test x$enable_gl = xyes)
 AM_CONDITIONAL(GLESV1_CM, test x$enable_glesv1_cm = xyes)
 AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
@@ -450,9 +476,6 @@ AM_CONDITIONAL(GLESV2, test x$enable_glesv2 = xyes)
 AM_CONDITIONAL(MOSAIC, test x$enable_glut = xyes)
 
 AM_CONDITIONAL(GUI, test x$enable_efl = xyes -o x$enable_fltk = xyes -o x$enable_glfw = xyes -o x$enable_glut = xyes -o x$enable_gtk = xyes -o x$enable_qt = xyes -o x$enable_sdl = xyes -o x$enable_sfml = xyes -o x$enable_wx = xyes)
-
-AM_CONDITIONAL(PNG, test x$enable_png = xyes)
-AM_CONDITIONAL(TIFF, test x$enable_tiff = xyes)
 
 AC_CONFIG_FILES(Makefile)
 

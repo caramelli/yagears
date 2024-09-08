@@ -86,7 +86,7 @@ static int create_gear(gears_t *gears, int id, float inner, float outer, float w
   glNewList(gear->list, GL_COMPILE);
   err = glGetError();
   if (err) {
-    printf("glNewList failed: 0x%x\n", err);
+    printf("glNewList failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
@@ -204,7 +204,7 @@ static int create_gear(gears_t *gears, int id, float inner, float outer, float w
   glEndList();
   err = glGetError();
   if (err) {
-    printf("glEndList failed: 0x%x\n", err);
+    printf("glEndList failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
@@ -372,7 +372,7 @@ static engine_t gl_engine = {
   gl_gears_term
 };
 
-void __attribute__((constructor)) engine_ctor()
+void __attribute__((constructor)) engine_ctor(void)
 {
   list_add(&gl_engine.entry, &engine_list);
 }

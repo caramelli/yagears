@@ -29,8 +29,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #if defined(GL_X11)
 #include <GL/glx.h>
@@ -39,6 +39,10 @@
 #include <directfbgl.h>
 #endif
 #if defined(GL_FBDEV)
+#include <dirent.h>
+#include <fcntl.h>
+#include <linux/input.h>
+#include <sys/mman.h>
 #include <GL/glfbdev.h>
 #endif
 
@@ -49,24 +53,26 @@
 #include <directfb.h>
 #endif
 #if defined(EGL_FBDEV)
+#include <dirent.h>
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <linux/input.h>
 #endif
 #if defined(EGL_WAYLAND)
-#include <wayland-egl.h>
 #include <sys/mman.h>
+#include <wayland-egl.h>
 #include <xkbcommon/xkbcommon.h>
 #endif
 #if defined(EGL_XCB)
 #include <xcb/xcb.h>
 #endif
 #if defined(EGL_DRM)
+#include <dirent.h>
 #include <fcntl.h>
 #include <gbm.h>
+#include <libevdev/libevdev.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
-#include <libevdev/libevdev.h>
 #ifdef HAVE_DRI
 #include <dlfcn.h>
 #include <limits.h>
@@ -119,9 +125,9 @@ struct __DRIimageExtensionRec {
 #endif
 #endif
 #if defined(EGL_RPI)
+#include <bcm_host.h>
 #include <fcntl.h>
 #include <termios.h>
-#include <bcm_host.h>
 #endif
 #if defined(EGL_X11) || defined(EGL_DIRECTFB) || defined(EGL_FBDEV) || defined(EGL_WAYLAND) || defined(EGL_XCB) || defined(EGL_DRM) || defined(EGL_RPI)
 #include <EGL/egl.h>
@@ -724,6 +730,12 @@ static void drm_keyboard_handle_key(struct input_event *event)
 #endif
 
 #if defined(EGL_RPI)
+typedef struct {
+  DISPMANX_ELEMENT_HANDLE_T element;
+  int width;
+  int height;
+} DISPMANX_WINDOW_T;
+
 static void rpi_keyboard_handle_key(char *event)
 {
   if (event) {
@@ -784,7 +796,8 @@ static void rpi_keyboard_handle_key(char *event)
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char backends[64], *backend_arg = NULL, *engine_arg = NULL, *c;
+  const char *backend_arg = NULL, *engine_arg = NULL;
+  char backends[64], *c;
   int opt, t_rate = 0, t_rot = 0, t, frames = 0;
   struct timeval tv;
 
@@ -822,6 +835,9 @@ int main(int argc, char *argv[])
   struct fb_fix_screeninfo fb_finfo;
   struct fb_var_screeninfo fb_vinfo;
   int fb_keyboard = -1;
+  DIR *fb_input_dir = NULL;
+  struct dirent *fb_input_dev = NULL;
+  unsigned char fb_key_bits[(KEY_CNT - 1) / 8 + 1];
   struct input_event fb_event;
   #endif
   #if defined(GL_FBDEV)
@@ -864,12 +880,14 @@ int main(int argc, char *argv[])
   uint32_t drm_fb_id = 0;
   drmEventContext drm_context = { DRM_EVENT_CONTEXT_VERSION, NULL, NULL };
   int drm_keyboard = -1;
+  DIR *drm_input_dir = NULL;
+  struct dirent *drm_input_dev = NULL;
   struct libevdev *drm_evdev = NULL;
   struct input_event drm_event;
   #endif
   #if defined(EGL_RPI)
   DISPMANX_DISPLAY_HANDLE_T rpi_dpy = DISPMANX_NO_HANDLE;
-  EGL_DISPMANX_WINDOW_T *rpi_win = NULL;
+  DISPMANX_WINDOW_T *rpi_win = NULL;
   DISPMANX_MODEINFO_T rpi_info;
   DISPMANX_UPDATE_HANDLE_T rpi_update = DISPMANX_NO_HANDLE;
   DISPMANX_ELEMENT_HANDLE_T rpi_element = DISPMANX_NO_HANDLE;
@@ -1428,6 +1446,9 @@ int main(int argc, char *argv[])
     memset(&dfb_desc, 0, sizeof(DFBWindowDescription));
     dfb_desc.flags = DWDESC_SURFACE_CAPS | DWDESC_WIDTH | DWDESC_HEIGHT | DWDESC_POSX | DWDESC_POSY;
     dfb_desc.surface_caps = dfb_attr;
+    if (getenv("DSCAPS_GL")) {
+      dfb_desc.surface_caps |= DSCAPS_GL;
+    }
     dfb_desc.width = win_width;
     dfb_desc.height = win_height;
     dfb_desc.posx = win_posx;
@@ -1485,17 +1506,39 @@ int main(int argc, char *argv[])
 
     if (getenv("KEYBOARD")) {
       fb_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
-        goto out;
-      }
     }
     else {
-      fb_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (fb_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+      fb_input_dir = opendir("/dev/input");
+      if (!fb_input_dir) {
+        printf("opendir /dev/input failed: %s\n", strerror(errno));
         goto out;
       }
+
+      c = alloca(64);
+
+      while ((fb_input_dev = readdir(fb_input_dir))) {
+        if (fb_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", fb_input_dev->d_name);
+          fb_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (fb_keyboard == -1)
+            continue;
+
+          err = ioctl(fb_keyboard, EVIOCGBIT(EV_KEY, sizeof(fb_key_bits)), fb_key_bits);
+          if (err == -1)
+            continue;
+
+          if (fb_key_bits[KEY_ENTER / 8] & (1 << (KEY_ENTER % 8)))
+            break;
+
+          close(fb_keyboard);
+          fb_keyboard = -1;
+        }
+      }
+    }
+
+    if (fb_keyboard == -1) {
+      printf("open keyboard event device failed\n");
+      goto out;
     }
   }
   #endif
@@ -1593,22 +1636,39 @@ int main(int argc, char *argv[])
 
     if (getenv("KEYBOARD")) {
       drm_keyboard = open(getenv("KEYBOARD"), O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open %s failed: %s\n", getenv("KEYBOARD"), strerror(errno));
-        goto out;
-      }
     }
     else {
-      drm_keyboard = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
-      if (drm_keyboard == -1) {
-        printf("open /dev/input/event0 failed: %s\n", strerror(errno));
+      drm_input_dir = opendir("/dev/input");
+      if (!drm_input_dir) {
+        printf("opendir /dev/input failed: %s\n", strerror(errno));
         goto out;
+      }
+
+      c = alloca(64);
+
+      while ((drm_input_dev = readdir(drm_input_dir))) {
+        if (drm_input_dev->d_type == DT_CHR) {
+          sprintf(c, "/dev/input/%s", drm_input_dev->d_name);
+          drm_keyboard = open(c, O_RDONLY | O_NONBLOCK);
+          if (drm_keyboard == -1)
+            continue;
+
+          err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
+          if (err < 0)
+            continue;
+
+          if (libevdev_has_event_code(drm_evdev, EV_KEY, KEY_ENTER))
+            break;
+
+          libevdev_free(drm_evdev);
+          close(drm_keyboard);
+          drm_keyboard = -1;
+        }
       }
     }
 
-    err = libevdev_new_from_fd(drm_keyboard, &drm_evdev);
-    if (err < 0) {
-      printf("libevdev_new_from_fd failed: %s\n", strerror(-err));
+    if (drm_keyboard == -1) {
+      printf("open keyboard event device failed\n");
       goto out;
     }
   }
@@ -1643,9 +1703,9 @@ int main(int argc, char *argv[])
       goto out;
     }
 
-    rpi_win = calloc(1, sizeof(EGL_DISPMANX_WINDOW_T));
+    rpi_win = calloc(1, sizeof(DISPMANX_WINDOW_T));
     if (!rpi_win) {
-      printf("EGL_DISPMANX_WINDOW_T calloc failed: %s\n", strerror(errno));
+      printf("DISPMANX_WINDOW_T calloc failed: %s\n", strerror(errno));
       goto out;
     }
 
@@ -1751,6 +1811,10 @@ int main(int argc, char *argv[])
   #endif
   #if defined(GL_DIRECTFB)
   if (!strcmp(backend, "gl-directfb")) {
+    c = alloca(2);
+    sprintf(c, "%d", gears_engine_version(gears_engine));
+    DirectFBSetOption("gles", c);
+
     err = dfb_win->GetGL(dfb_win, &dfb_ctx);
     if (err) {
       printf("GetGL failed: %s\n", DirectFBErrorString(err));
@@ -1864,7 +1928,12 @@ int main(int argc, char *argv[])
       #endif
       #if defined(GL_DIRECTFB)
       if (!strcmp(backend, "gl-directfb")) {
-        dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        if (getenv("DSCAPS_GL")) {
+          dfb_ctx->SwapBuffers(dfb_ctx);
+        }
+        else {
+          dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        }
       }
       #endif
       #if defined(GL_FBDEV)
@@ -1900,8 +1969,13 @@ int main(int argc, char *argv[])
     #endif
     #if defined(GL_DIRECTFB) || defined(EGL_DIRECTFB)
     if (!strcmp(backend, "gl-directfb") || !strcmp(backend, "egl-directfb")) {
-      if (!animate && redisplay) {
-        redisplay = 0;
+      if (redisplay) {
+        if (getenv("DSCAPS_GL")) {
+          dfb_win->Flip(dfb_win, NULL, DSFLIP_WAITFORSYNC);
+        }
+        if (!animate) {
+          redisplay = 0;
+        }
       }
 
       memset(&dfb_event, 0, sizeof(DFBWindowEvent));
@@ -1945,8 +2019,8 @@ int main(int argc, char *argv[])
       if (xcb_event) {
         if ((xcb_event->response_type & 0x7f) == XCB_KEY_PRESS) {
           xcb_keyboard_handle_key(xcb_event);
-          free(xcb_event);
         }
+        free(xcb_event);
       }
     }
     #endif
@@ -2193,6 +2267,10 @@ out:
       close(fb_keyboard);
     }
 
+    if (fb_input_dir) {
+      closedir(fb_input_dir);
+    }
+
     if (fb_win) {
       free(fb_win);
     }
@@ -2286,6 +2364,10 @@ out:
 
     if (drm_keyboard != -1) {
       close(drm_keyboard);
+    }
+
+    if (drm_input_dir) {
+      closedir(drm_input_dir);
     }
 
     if (drm_win) {

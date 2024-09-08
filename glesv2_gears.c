@@ -346,14 +346,14 @@ static int create_gear(gears_t *gears, int id, float inner, float outer, float w
   glBindBuffer(GL_ARRAY_BUFFER, gear->vbo);
   err = glGetError();
   if (err) {
-    printf("glBindBuffer failed: 0x%x\n", err);
+    printf("glBindBuffer failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
   glBufferData(GL_ARRAY_BUFFER, gear->nvertices * sizeof(Vertex), gear->vertices, GL_STATIC_DRAW);
   err = glGetError();
   if (err) {
-    printf("glBufferData failed: 0x%x\n", err);
+    printf("glBufferData failed: 0x%x\n", (unsigned int)err);
     goto out;
   }
 
@@ -587,7 +587,7 @@ static gears_t *glesv2_gears_init(int win_width, int win_height)
     goto out;
   }
 
-  /* destory shaders */
+  /* destroy shaders */
 
   glDeleteShader(fragShader);
   glDeleteShader(vertShader);
@@ -686,7 +686,7 @@ static engine_t glesv2_engine = {
   glesv2_gears_term
 };
 
-static void __attribute__((constructor)) engine_ctor()
+static void __attribute__((constructor)) engine_ctor(void)
 {
   list_add(&glesv2_engine.entry, &engine_list);
 }

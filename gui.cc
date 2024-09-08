@@ -38,7 +38,11 @@
 #endif
 #if defined(GLUT)
 #include <GL/glut.h>
+#ifndef GLUT_ES_PROFILE
+#define GLUT_ES_PROFILE 4
+#endif
 extern "C" {
+void glutInitContextProfile(int);
 void glutLeaveMainLoop();
 void glutExit();
 }
@@ -591,7 +595,7 @@ void keyPressEvent(QKeyEvent *event)
 #endif
 
 #if defined(SDL)
-#if SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(2,0,0)
 static void SDL_Display(SDL_Window *window)
 #else
 static void SDL_Display()
@@ -601,14 +605,14 @@ static void SDL_Display()
   gears_engine_draw(gears_engine, view_tz, view_rx, view_ry, model_rz);
   if (animate) frames++;
 
-  #if SDL_VERSION_ATLEAST(2, 0, 0)
+  #if SDL_VERSION_ATLEAST(2,0,0)
   SDL_GL_SwapWindow(window);
   #else
   SDL_GL_SwapBuffers();
   #endif
 }
 
-#if SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(2,0,0)
 static void SDL_Idle(SDL_Window *window)
 #else
 static void SDL_Idle()
@@ -616,7 +620,7 @@ static void SDL_Idle()
 {
   if (animate) {
     if (!frames) return;
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_Display(window);
     #else
     SDL_Display();
@@ -627,7 +631,7 @@ static void SDL_Idle()
   }
 }
 
-#if SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(2,0,0)
 static void SDL_KeyDownEvent(SDL_Window *window, SDL_Event *event, void *data)
 #else
 static void SDL_KeyDownEvent(SDL_Event *event, void *data)
@@ -646,7 +650,7 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
     case SDLK_SPACE:
       animate = !animate;
       if (animate) {
-        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        #if SDL_VERSION_ATLEAST(2,0,0)
         SDL_Display(window);
         #else
         SDL_Display();
@@ -684,7 +688,7 @@ static void SDL_KeyDownEvent(SDL_Event *event, void *data)
   }
 
   if (!animate) {
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_Display(window);
     #else
     SDL_Display();
@@ -897,7 +901,8 @@ wxAppConsole *WxAppInitializer()
 int main(int argc, char *argv[])
 {
   int err = 0, ret = EXIT_FAILURE;
-  char toolkits[64], *toolkit_arg = NULL, *engine_arg = NULL, *c;
+  const char *toolkit_arg = NULL, *engine_arg = NULL;
+  char toolkits[64], *c;
   int opt;
   #if defined(EFL)
   Evas_Object *elm_win;
@@ -921,7 +926,7 @@ int main(int argc, char *argv[])
   QtGLWidget *qt_win;
   #endif
   #if defined(SDL)
-  #if SDL_VERSION_ATLEAST(2, 0, 0)
+  #if SDL_VERSION_ATLEAST(2,0,0)
   SDL_Window *sdl_win;
   #else
   SDL_Surface *sdl_win;
@@ -1086,7 +1091,7 @@ int main(int argc, char *argv[])
   if (!strcmp(toolkit, "sdl")) {
     SDL_Init(SDL_INIT_VIDEO);
 
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_DisplayMode sdl_mode;
     SDL_GetDisplayMode(0, 0, &sdl_mode);
     win_width = sdl_mode.w;
@@ -1178,6 +1183,7 @@ int main(int argc, char *argv[])
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH);
     glutInitWindowSize(win_width, win_height);
     glutInitWindowPosition(win_posx, win_posy);
+    glutInitContextProfile(gears_engine_version(gears_engine) ? GLUT_ES_PROFILE : 0);
     glut_win = glutCreateWindow("yagears");
     glutDisplayFunc(glutDisplay);
     glutIdleFunc(glutIdle);
@@ -1196,7 +1202,8 @@ int main(int argc, char *argv[])
     gtk_gl_area_set_has_depth_buffer(GTK_GL_AREA(gtk_glarea), TRUE);
     g_signal_connect(gtk_glarea, "render", G_CALLBACK(gtk_render), NULL);
     #else
-    int gdk_glconfig[] = { GDK_GL_RGBA, GDK_GL_DOUBLEBUFFER, GDK_GL_DEPTH_SIZE, 1, GDK_GL_NONE };
+    int gdk_glconfig[] = { GDK_GL_RGBA, GDK_GL_DOUBLEBUFFER, GDK_GL_DEPTH_SIZE, 1, GDK_GL_NONE, GDK_GL_NONE };
+    if (gears_engine_version(gears_engine)) gdk_glconfig[4] = GDK_GL_USE_ES;
     gtk_glarea = gtk_gl_area_new(gdk_glconfig);
     #if GTK_CHECK_VERSION(3,0,0)
     g_signal_connect(gtk_glarea, "draw", G_CALLBACK(gtk_render), NULL);
@@ -1228,7 +1235,7 @@ int main(int argc, char *argv[])
 
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, gears_engine_version(gears_engine) ? SDL_GL_CONTEXT_PROFILE_ES : 0);
     sdl_win = SDL_CreateWindow("yagears", win_posx, win_posy, win_width, win_height, SDL_WINDOW_OPENGL);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, gears_engine_version(gears_engine));
@@ -1319,21 +1326,21 @@ int main(int argc, char *argv[])
 
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_Display(sdl_win);
     #else
     SDL_Display();
     #endif
     while (1) {
       if (sdl_idle_id)
-        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        #if SDL_VERSION_ATLEAST(2,0,0)
         SDL_Idle(sdl_win);
         #else
         SDL_Idle();
         #endif
       SDL_Event event;
       while (SDL_PollEvent(&event))
-        #if SDL_VERSION_ATLEAST(2, 0, 0)
+        #if SDL_VERSION_ATLEAST(2,0,0)
         SDL_KeyDownEvent(sdl_win, &event, &sdl_idle_id);
         #else
         SDL_KeyDownEvent(&event, &sdl_idle_id);
@@ -1427,7 +1434,7 @@ out:
 
   #if defined(SDL)
   if (!strcmp(toolkit, "sdl")) {
-    #if SDL_VERSION_ATLEAST(2, 0, 0)
+    #if SDL_VERSION_ATLEAST(2,0,0)
     SDL_DestroyWindow(sdl_win);
     #else
     SDL_FreeSurface(sdl_win);

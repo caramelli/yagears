@@ -101,7 +101,7 @@ static loader_t png_loader = {
   png_term
 };
 
-static void __attribute__((constructor)) loader_ctor()
+static void __attribute__((constructor)) loader_ctor(void)
 {
   list_add(&png_loader.entry, &loader_list);
 }

@@ -24,6 +24,10 @@
 #include "config.h"
 
 #include <GL/glut.h>
+#ifndef GLUT_ES_PROFILE
+#define GLUT_ES_PROFILE 4
+#endif
+void glutInitContextProfile(int);
 void glutSetWindowData(void *data);
 void *glutGetWindowData();
 void glutLeaveMainLoop();
@@ -196,6 +200,7 @@ int main(int argc, char *argv[])
     for (j = 0; j < COLS; j++) {
       gears_engine[i * COLS + j] = gears_engine_new(gears_engine_name(opt));
       glutInitWindowPosition(win_posx, win_posy);
+      glutInitContextProfile(gears_engine_version(gears_engine[i * COLS + j]) ? GLUT_ES_PROFILE : 0);
       glut_win[i * COLS + j] = glutCreateWindow(NULL);
       glutSetWindowData((void *)(long)(i * COLS + j));
       glutDisplayFunc(glutDisplay);
