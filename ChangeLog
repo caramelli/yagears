@@ -1,3 +1,15 @@
+commit 6112dfb09f228a61c8381eba9e6e4f14ebc1bfc8
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Wed Sep 4 18:31:23 2024 +0200
+
+    select the /dev/input/event corresponding to the keyboard
+
+commit 656424b6f94e2a74564f91390b28ad32879221ec
+Author: Nicolas Caramelli <caramelli.devel@gmail.com>
+Date:   Mon Jul 10 05:23:50 2023 +0200
+
+    update ChangeLog
+
 commit 69cafda9b79747a1b793eff49aba9f5b33dd17e8
 Author: Nicolas Caramelli <caramelli.devel@gmail.com>
 Date:   Mon Jul 10 05:23:34 2023 +0200
