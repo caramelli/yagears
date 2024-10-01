@@ -79,6 +79,6 @@ if VK_GUI
 bin_PROGRAMS            += yagears2-vk-gui
 yagears2_vk_gui_SOURCES  = vk-gui.cc vulkan_gears.c image_loader.c $(PNG_SOURCE) $(TIFF_SOURCE)
 yagears2_vk_gui_CFLAGS   = @VULKAN_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@
-yagears2_vk_gui_CXXFLAGS = @VULKAN_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@ @GLFW_CFLAGS@ @SDL_CFLAGS@
-yagears2_vk_gui_LDADD    = @VULKAN_LIBS@ @PNG_LIBS@ @TIFF_LIBS@ @GLFW_LIBS@ @SDL_LIBS@
+yagears2_vk_gui_CXXFLAGS = @VULKAN_CFLAGS@ @PNG_CFLAGS@ @TIFF_CFLAGS@ @GLFW_CFLAGS@ @SDL_CFLAGS@ @SFML_CFLAGS@
+yagears2_vk_gui_LDADD    = @VULKAN_LIBS@ @PNG_LIBS@ @TIFF_LIBS@ @GLFW_LIBS@ @SDL_LIBS@ @SFML_LIBS@
 endif

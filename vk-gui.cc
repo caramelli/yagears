@@ -41,6 +41,9 @@
 #include <SDL_vulkan.h>
 #endif
 #endif
+#if defined(SFML)
+#include <SFML/Graphics.hpp>
+#endif
 
 #include "vulkan_gears.h"
 
@@ -248,6 +251,95 @@ static void SDL_KeyDownEvent(SDL_Window *window, SDL_Event *event, void *data)
 }
 #endif
 
+#if defined(SFML)
+class SfRenderWindow : public sf::RenderWindow {
+public:
+int idle_id;
+
+SfRenderWindow(const sf::String& title) : RenderWindow(sf::VideoMode(win_width, win_height), title, sf::Style::Default, sf::ContextSettings(1))
+{
+  idle_id = 1;
+}
+
+void draw()
+{
+  if (animate) { if (frames) rotate(); else t_rate = t_rot = current_time(); }
+  vk_gears_draw(gears, view_tz, view_rx, view_ry, model_rz, vk_queue);
+  if (animate) frames++;
+
+  uint32_t vk_index = 0;
+  VkPresentInfoKHR vk_present_info;
+  memset(&vk_present_info, 0, sizeof(VkPresentInfoKHR));
+  vk_present_info.swapchainCount = 1;
+  vk_present_info.pSwapchains = &vk_swapchain;
+  vk_present_info.pImageIndices = &vk_index;
+  vkQueuePresentKHR(vk_queue, &vk_present_info);
+}
+
+void idle()
+{
+  if (animate) {
+    if (!frames) return;
+    draw();
+  }
+  else {
+    if (frames) frames = 0;
+  }
+}
+
+void keyPressedEvent(sf::Event &event)
+{
+  if (event.type != sf::Event::KeyPressed)
+    return;
+
+  switch (event.key.code) {
+    case sf::Keyboard::Escape:
+      idle_id = 0;
+      event.type = sf::Event::Closed;
+      return;
+    case sf::Keyboard::Space:
+      animate = !animate;
+      if (animate) {
+        draw();
+      }
+      return;
+    case sf::Keyboard::PageDown:
+      view_tz -= -5.0;
+      break;
+    case sf::Keyboard::PageUp:
+      view_tz += -5.0;
+      break;
+    case sf::Keyboard::Down:
+      view_rx -= 5.0;
+      break;
+    case sf::Keyboard::Up:
+      view_rx += 5.0;
+      break;
+    case sf::Keyboard::Right:
+      view_ry -= 5.0;
+      break;
+    case sf::Keyboard::Left:
+      view_ry += 5.0;
+      break;
+    case sf::Keyboard::T:
+      if (getenv("NO_TEXTURE")) {
+        unsetenv("NO_TEXTURE");
+      }
+      else {
+        setenv("NO_TEXTURE", "1", 1);
+      }
+      break;
+    default:
+      return;
+  }
+
+  if (!animate) {
+    draw();
+  }
+}
+};
+#endif
+
 /******************************************************************************/
 
 int main(int argc, char *argv[])
@@ -262,6 +354,10 @@ int main(int argc, char *argv[])
   #if SDL_MAJOR_VERSION >= 2
   SDL_Window *sdl_win;
   int sdl_idle_id;
+  #endif
+  #if defined(SFML)
+  sf::VideoMode *sfml_app;
+  SfRenderWindow *sfml_win;
   #endif
   uint32_t vk_extension_count;
   const char **vk_extension_names = NULL;
@@ -283,6 +379,9 @@ int main(int argc, char *argv[])
   #endif
   #if SDL_MAJOR_VERSION >= 2
   strcat(toolkits, "sdl ");
+  #endif
+  #if defined(SFML)
+  strcat(toolkits, "sfml ");
   #endif
 
   while ((opt = getopt(argc, argv, "t:h")) != -1) {
@@ -339,6 +438,15 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_app = new sf::VideoMode;
+
+    win_width = sfml_app->getDesktopMode().width;
+    win_height = sfml_app->getDesktopMode().height;
+  }
+  #endif
+
   if (getenv("WIDTH")) {
     win_width = atoi(getenv("WIDTH"));
   }
@@ -373,6 +481,13 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_win = new SfRenderWindow("yagears");
+    sfml_win->setPosition(sf::Vector2i(win_posx, win_posy));
+  }
+  #endif
+
   /* create instance and set physical device */
 
   #if defined(GLFW)
@@ -386,6 +501,15 @@ int main(int argc, char *argv[])
     SDL_Vulkan_GetInstanceExtensions(sdl_win, &vk_extension_count, NULL);
     vk_extension_names = (const char **)calloc(vk_extension_count, sizeof(const char *));
     SDL_Vulkan_GetInstanceExtensions(sdl_win, &vk_extension_count, vk_extension_names);
+  }
+  #endif
+
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    const std::vector<const char *> extensions = sf::Vulkan::getGraphicsRequiredInstanceExtensions();
+    vk_extension_count = extensions.size();
+    vk_extension_names = new const char *[vk_extension_count];
+    std::copy(extensions.begin(), extensions.end(), vk_extension_names);
   }
   #endif
 
@@ -425,6 +549,12 @@ int main(int argc, char *argv[])
   #if SDL_MAJOR_VERSION >= 2
   if (!strcmp(toolkit, "sdl")) {
     SDL_Vulkan_CreateSurface(sdl_win, vk_instance, &vk_surface);
+  }
+  #endif
+
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_win->createVulkanSurface(vk_instance, vk_surface);
   }
   #endif
 
@@ -500,6 +630,24 @@ int main(int argc, char *argv[])
   }
   #endif
 
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    sfml_win->draw();
+    while (1) {
+      if (sfml_win->idle_id)
+        sfml_win->idle();
+      sf::Event event;
+      while (sfml_win->pollEvent(event)) {
+        sfml_win->keyPressedEvent(event);
+        if (event.type == sf::Event::Closed)
+          break;
+      }
+      if (event.type == sf::Event::Closed)
+        break;
+    }
+  }
+  #endif
+
   /* benchmark */
 
   if (fps) {
@@ -549,6 +697,14 @@ out:
     free(vk_extension_names);
     SDL_DestroyWindow(sdl_win);
     SDL_Quit();
+  }
+  #endif
+
+  #if defined(SFML)
+  if (!strcmp(toolkit, "sfml")) {
+    delete(vk_extension_names);
+    delete sfml_win;
+    delete sfml_app;
   }
   #endif
 

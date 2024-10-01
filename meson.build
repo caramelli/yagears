@@ -701,7 +701,7 @@ else
   GUI = false
 endif
 
-if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d) and (enable_glfw or (enable_sdl and with_sdl == '2'))
+if (enable_vk_x11 or enable_vk_directfb or enable_vk_fbdev or enable_vk_wayland or enable_vk_xcb or enable_vk_d2d) and (enable_glfw or enable_sdl and with_sdl == '2' or enable_sfml)
   VK_GUI = true
 else
   VK_GUI = false
@@ -783,6 +783,6 @@ endif
 if VK_GUI
 executable('yagears2-vk-gui',
            'vk-gui.cc', 'vulkan_gears.c', vert_spv_file, frag_spv_file, 'image_loader.c', png_source, tiff_source,
-           dependencies: [vulkan_dep, png_dep, tiff_dep, glfw_dep, sdl_dep],
+           dependencies: [vulkan_dep, png_dep, tiff_dep, glfw_dep, sdl_dep, sfml_dep],
            install: true)
 endif
