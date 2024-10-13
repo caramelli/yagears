@@ -121,7 +121,10 @@ if not enable_gl
   if enable_glesv1_cm
     glesv1_cm_dep = dependency('glesv1_cm', required: false)
     if glesv1_cm_dep.found()
-      glesv1_cm_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv1_cm', check: true).stdout().strip().split(' '))
+      glesv1_cm_clags = run_command('pkg-config', '--cflags', 'glesv1_cm', check: true).stdout().strip()
+      if glesv1_cm_clags != ''
+          glesv1_cm_dep = declare_dependency(compile_args: glesv1_cm_clags.split(' '))
+      endif
       glesv1_cm_dep = declare_dependency(compile_args: ['-DGLESV1_CM_H=<GLES/gl.h>', '-DGLESV1_CM_LIB="libGLESv1_CM.so.1"'], link_args: '-ldl', dependencies: glesv1_cm_dep)
     else
       enable_glesv1_cm = false
@@ -132,7 +135,10 @@ if not enable_gl
     glesv2_dep = dependency('glesv2', required: false)
     xxd = find_program('xxd', required: false)
     if glesv2_dep.found() and xxd.found()
-      glesv2_dep = declare_dependency(compile_args: run_command('pkg-config', '--cflags', 'glesv2', check: true).stdout().strip().split(' '))
+      glesv2_clags = run_command('pkg-config', '--cflags', 'glesv2', check: true).stdout().strip()
+      if glesv2_clags != ''
+          glesv2_dep = declare_dependency(compile_args: glesv2_clags.split(' '))
+      endif
       glesv2_dep = declare_dependency(compile_args: ['-DGLESV2_H=<GLES2/gl2.h>', '-DGLESV2_LIB="libGLESv2.so.2"'], link_args: '-ldl', dependencies: glesv2_dep)
     else
       enable_glesv2 = false
